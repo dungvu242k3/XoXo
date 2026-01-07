@@ -639,56 +639,16 @@ export const KanbanBoard: React.FC = () => {
         return [];
       }
 
-      // Get workflows from all selected orders
-      const selectedOrders = (orders || []).filter(o => o && selectedOrderIds.has(o.id));
-      if (selectedOrders.length === 0) {
-        return [];
-      }
+      // Use Orders as Columns
+      const relevantOrders = (orders || []).filter(o => o && selectedOrderIds.has(o.id));
+      relevantOrders.sort((a, b) => b.id.localeCompare(a.id));
 
-      const orderWorkflowIds = new Set<string>();
-
-      // Process all selected orders
-      selectedOrders.forEach(order => {
-        if (order && order.items && Array.isArray(order.items)) {
-          order.items
-            .filter(item => item && !item.isProduct && item.serviceId)
-            .forEach(item => {
-              // Get service from item
-              const service = (services || []).find(s => s && s.id === item.serviceId);
-              if (service && service.workflows && Array.isArray(service.workflows) && service.workflows.length > 0) {
-                // Add ALL workflows from this service (not just current one)
-                service.workflows.forEach(wf => {
-                  // Try to find workflow by ID or label
-                  let workflowExists = (workflows || []).find(w => w && w.id === wf.id);
-                  if (!workflowExists) {
-                    workflowExists = (workflows || []).find(w => {
-                      const wId = w.id?.trim();
-                      const wLabel = w.label?.trim();
-                      const wfId = wf.id?.trim();
-                      return wId === wfId ||
-                        wLabel === wfId ||
-                        (typeof wf.id === 'string' && w.id?.toLowerCase() === wf.id.toLowerCase()) ||
-                        (typeof wf.id === 'string' && w.label?.toLowerCase() === wf.id.toLowerCase());
-                    });
-                  }
-                  if (workflowExists) {
-                    orderWorkflowIds.add(workflowExists.id);
-                  }
-                });
-              }
-            });
-        }
-      });
-
-      const workflowsToShow = (workflows || []).filter(wf => wf && wf.id && orderWorkflowIds.has(wf.id));
-
-      return workflowsToShow.map(wf => ({
-        id: wf?.id || '',
-        title: wf?.label || '',
-        color: wf?.color ? wf.color.replace('-500', '-900/10') : 'bg-neutral-900',
-        dot: 'bg-slate-500',
-        isSpecial: false
-      })).filter(w => w.id);
+      return relevantOrders.map(order => ({
+        id: order.id,
+        title: `#${order.id} | ${order.customerName}`,
+        dot: 'bg-gold-500',
+        color: 'bg-neutral-900/50'
+      }));
     }
 
     let workflowColumns: any[] = [];
@@ -712,25 +672,7 @@ export const KanbanBoard: React.FC = () => {
       }));
     }
 
-    return [
-      ...workflowColumns,
-      {
-        id: 'done',
-        title: 'Done',
-        color: 'bg-emerald-900/10',
-        dot: 'bg-emerald-500',
-        isSpecial: true,
-        specialType: 'done'
-      },
-      {
-        id: 'cancel',
-        title: 'Cancel',
-        color: 'bg-red-900/10',
-        dot: 'bg-red-500',
-        isSpecial: true,
-        specialType: 'cancel'
-      }
-    ];
+    return workflowColumns;
   }, [activeWorkflow, workflows, Array.from(selectedOrderIds).join(','), orders, services]);
 
   const [modalConfig, setModalConfig] = useState<{
@@ -1160,15 +1102,9 @@ export const KanbanBoard: React.FC = () => {
     return `${minutes}p`;
   };
 
-  // Helper to check if item matches column
   const checkStatusMatch = (item: KanbanItem, colId: string) => {
     if (activeWorkflow === 'ALL') {
-      if (item.workflowId === colId) return true;
-      if (!item.workflowId) {
-        const wf = (workflows || []).find(w => w && w.id === colId);
-        if (wf && wf.types && wf.types.includes(item.type)) return true;
-      }
-      return false;
+      return item.orderId === colId;
     }
 
     if (item.status === colId) return true;
@@ -1493,149 +1429,79 @@ export const KanbanBoard: React.FC = () => {
 
         {/* Right Content: Kanban Board or Matrix View */}
         <div className="flex-1 overflow-hidden bg-neutral-900/50 rounded-xl border border-neutral-800 relative">
-          {activeWorkflow === 'ALL' ? (
-            // MATRIX VIEW
-            <div className="absolute inset-0 overflow-auto">
-              <div className="min-w-full w-max">
-                {/* Header Row */}
-                <div className="flex border-b border-neutral-800 sticky top-0 bg-neutral-900 z-20">
-                  {columns.map(col => (
-                    <div key={col.id} className="w-[280px] flex-shrink-0 p-4 border-r border-neutral-800 flex items-center gap-2">
+          <div className="flex h-full gap-6 min-w-full p-4 overflow-x-auto">
+            {columns.map(col => {
+              const colItems = filteredItems
+                .filter(i => checkStatusMatch(i, col.id))
+                .sort((a, b) => {
+                  // Sort by workflow stage order first
+                  const aWorkflow = (workflows || []).find(w => w && w.id === a.workflowId);
+                  const bWorkflow = (workflows || []).find(w => w && w.id === b.workflowId);
+
+                  if (aWorkflow && bWorkflow) {
+                    const aStage = aWorkflow.stages?.find(s => s.id === a.status);
+                    const bStage = bWorkflow.stages?.find(s => s.id === b.status);
+
+                    if (aStage && bStage) {
+                      const orderDiff = aStage.order - bStage.order;
+                      if (orderDiff !== 0) return orderDiff;
+                    }
+                  }
+
+                  // Then sort by expected delivery date
+                  if (a.expectedDelivery && b.expectedDelivery) {
+                    const aDate = new Date(a.expectedDelivery).getTime();
+                    const bDate = new Date(b.expectedDelivery).getTime();
+                    if (!isNaN(aDate) && !isNaN(bDate)) {
+                      const dateDiff = aDate - bDate;
+                      if (dateDiff !== 0) return dateDiff;
+                    }
+                  }
+
+                  // Finally sort by last updated (most recent first)
+                  if (a.lastUpdated && b.lastUpdated) {
+                    return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+                  }
+
+                  // Fallback: sort by order ID
+                  return a.orderId.localeCompare(b.orderId);
+                });
+
+              return (
+                <div
+                  key={col.id}
+                  className="flex-1 flex flex-col bg-neutral-950/50 rounded-xl border border-neutral-800 shadow-sm min-w-[320px]"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, col.id)}
+                >
+                  {/* Column Header */}
+                  <div className="p-4 flex items-center justify-between border-b border-neutral-800 bg-neutral-900/80 backdrop-blur rounded-t-xl sticky top-0 z-10">
+                    <div className="flex items-center gap-2">
                       <span className={`w-2.5 h-2.5 rounded-full ${col.dot}`}></span>
                       <h3 className="font-semibold text-slate-300 text-sm uppercase tracking-wide">{col.title}</h3>
                     </div>
-                  ))}
-                  <div className="w-[200px] flex-shrink-0 p-3 font-bold text-gold-500 text-center bg-neutral-800 border-l border-neutral-700 sticky right-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.5)] z-30 ml-auto">
-                    THÔNG TIN
+                    <div className="flex items-center gap-1">
+                      <span className="bg-neutral-800 text-slate-400 text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
+                        {colItems.length}
+                      </span>
+                      <button
+                        onClick={() => setEditingStage({ stageId: col.id, stageName: col.title })}
+                        className="p-1.5 hover:bg-neutral-800 rounded-lg text-slate-500 hover:text-slate-200 transition-colors"
+                        title="Chỉnh sửa tasks mặc định"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Column Body */}
+                  <div className={`flex-1 overflow-y-auto p-3 space-y-3 ${col.color}`}>
+                    {colItems.map(item => renderCard(item))}
                   </div>
                 </div>
-
-                {/* Order Rows */}
-                {(() => {
-                  // Group items by OrderID
-                  const orderGroups: Record<string, KanbanItem[]> = {};
-                  filteredItems.forEach(item => {
-                    if (!orderGroups[item.orderId]) orderGroups[item.orderId] = [];
-                    orderGroups[item.orderId].push(item);
-                  });
-
-                  return Object.entries(orderGroups).map(([orderId, orderItems]) => {
-                    const firstItem = orderItems[0];
-                    return (
-                      <div key={orderId} className="flex border-b border-neutral-800 hover:bg-neutral-800/30 transition-colors group">
-                        {/* Stage Columns */}
-                        {columns.map(col => {
-                          const itemsInStage = orderItems.filter(item => checkStatusMatch(item, col.id));
-                          return (
-                            <div
-                              key={col.id}
-                              className={`w-[280px] flex-shrink-0 p-3 border-r border-neutral-800 min-h-[150px] ${itemsInStage.length > 0 ? '' : 'bg-neutral-900/20'}`}
-                              onDragOver={handleDragOver}
-                              onDrop={(e) => handleDrop(e, col.id)}
-                            >
-                              {itemsInStage.map(item => renderCard(item))}
-                            </div>
-                          );
-                        })}
-
-                        {/* Order Info Column (Sticky Right) */}
-                        <div className="w-[200px] flex-shrink-0 p-3 bg-neutral-900/95 border-l border-neutral-800 flex flex-col justify-center sticky right-0 z-10 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.5)] ml-auto">
-                          <h3 className="text-xl font-serif font-bold text-gold-500 mb-1">#{orderId}</h3>
-                          <p className="text-slate-300 font-medium text-lg mb-2">{firstItem.customerName}</p>
-
-                          <div className="flex flex-col gap-2 mt-2">
-                            <div className="flex items-center gap-2 text-sm text-slate-400">
-                              <Calendar size={14} />
-                              <span>Ngày hẹn: <span className="text-slate-300">{firstItem.expectedDelivery}</span></span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-slate-400">
-                              <Briefcase size={14} />
-                              <span>Tổng mục: <span className="text-slate-300">{orderItems.length}</span></span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
-          ) : (
-            // STANDARD KANBAN VIEW
-            <div className="flex h-full gap-6 min-w-[1200px] p-4 overflow-x-auto">
-              {columns.map(col => {
-                const colItems = filteredItems
-                  .filter(i => checkStatusMatch(i, col.id))
-                  .sort((a, b) => {
-                    // Sort by workflow stage order first
-                    const aWorkflow = (workflows || []).find(w => w && w.id === a.workflowId);
-                    const bWorkflow = (workflows || []).find(w => w && w.id === b.workflowId);
-
-                    if (aWorkflow && bWorkflow) {
-                      const aStage = aWorkflow.stages?.find(s => s.id === a.status);
-                      const bStage = bWorkflow.stages?.find(s => s.id === b.status);
-
-                      if (aStage && bStage) {
-                        const orderDiff = aStage.order - bStage.order;
-                        if (orderDiff !== 0) return orderDiff;
-                      }
-                    }
-
-                    // Then sort by expected delivery date
-                    if (a.expectedDelivery && b.expectedDelivery) {
-                      const aDate = new Date(a.expectedDelivery).getTime();
-                      const bDate = new Date(b.expectedDelivery).getTime();
-                      if (!isNaN(aDate) && !isNaN(bDate)) {
-                        const dateDiff = aDate - bDate;
-                        if (dateDiff !== 0) return dateDiff;
-                      }
-                    }
-
-                    // Finally sort by last updated (most recent first)
-                    if (a.lastUpdated && b.lastUpdated) {
-                      return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-                    }
-
-                    // Fallback: sort by order ID
-                    return a.orderId.localeCompare(b.orderId);
-                  });
-
-                return (
-                  <div
-                    key={col.id}
-                    className="flex-1 flex flex-col bg-neutral-950/50 rounded-xl border border-neutral-800 shadow-sm min-w-[320px]"
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, col.id)}
-                  >
-                    {/* Column Header */}
-                    <div className="p-4 flex items-center justify-between border-b border-neutral-800 bg-neutral-900/80 backdrop-blur rounded-t-xl sticky top-0 z-10">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${col.dot}`}></span>
-                        <h3 className="font-semibold text-slate-300 text-sm uppercase tracking-wide">{col.title}</h3>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="bg-neutral-800 text-slate-400 text-xs px-2.5 py-1 rounded-full font-bold shadow-sm">
-                          {colItems.length}
-                        </span>
-                        <button
-                          onClick={() => setEditingStage({ stageId: col.id, stageName: col.title })}
-                          className="p-1.5 hover:bg-neutral-800 rounded-lg text-slate-500 hover:text-slate-200 transition-colors"
-                          title="Chỉnh sửa tasks mặc định"
-                        >
-                          <MoreHorizontal size={16} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Column Body */}
-                    <div className={`flex-1 overflow-y-auto p-3 space-y-3 ${col.color}`}>
-                      {colItems.map(item => renderCard(item))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
       </div>
 
