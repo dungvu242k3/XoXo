@@ -102,10 +102,20 @@ export const KanbanBoard: React.FC = () => {
         .select('*');
 
       if (!error && data) {
-        const list = data.map(item => ({ ...item } as ServiceCatalogItem));
+        const list = data.map(item => ({
+          ...item,
+          // Ensure mapping if keys differ (though DB should match now)
+          ten_dich_vu: item.ten_dich_vu || item.name,
+          cac_buoc_quy_trinh: item.cac_buoc_quy_trinh || item.workflows,
+          id_quy_trinh: item.id_quy_trinh || item.workflowId,
+          gia_niem_yet: item.gia_niem_yet || item.price || 0,
+          danh_muc: item.danh_muc || item.category || '',
+          mo_ta: item.mo_ta || item.desc || '',
+          anh_dich_vu: item.anh_dich_vu || item.image || ''
+        } as ServiceCatalogItem));
         console.log('📦 Services loaded:', {
           count: list.length,
-          services: list.map(s => ({ id: s.id, name: s.name, workflowsCount: s.workflows?.length || 0 }))
+          services: list.map(s => ({ id: s.id, name: s.ten_dich_vu, workflowsCount: s.cac_buoc_quy_trinh?.length || 0 }))
         });
         setServices(list);
       } else {
@@ -128,7 +138,16 @@ export const KanbanBoard: React.FC = () => {
         async () => {
           const { data } = await supabase.from(DB_PATHS.SERVICES).select('*');
           if (data) {
-            const list = data.map(item => ({ ...item } as ServiceCatalogItem));
+            const list = data.map(item => ({
+              ...item,
+              ten_dich_vu: item.ten_dich_vu || item.name,
+              cac_buoc_quy_trinh: item.cac_buoc_quy_trinh || item.workflows,
+              id_quy_trinh: item.id_quy_trinh || item.workflowId,
+              gia_niem_yet: item.gia_niem_yet || item.price || 0,
+              danh_muc: item.danh_muc || item.category || '',
+              mo_ta: item.mo_ta || item.desc || '',
+              anh_dich_vu: item.anh_dich_vu || item.image || ''
+            } as ServiceCatalogItem));
             setServices(list);
           }
         }
@@ -151,14 +170,14 @@ export const KanbanBoard: React.FC = () => {
         if (!error && data) {
           const workflowsList: WorkflowDefinition[] = data.map(wf => ({
             id: wf.id || '',
-            label: wf.label || '',
-            description: wf.description || '',
-            department: wf.department || 'Kỹ Thuật',
-            types: wf.types || [],
-            color: wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
-            materials: wf.materials || undefined,
-            stages: wf.stages || undefined,
-            assignedMembers: wf.assignedMembers || undefined
+            ten_quy_trinh: wf.ten_quy_trinh || wf.label || '',
+            mo_ta: wf.mo_ta || wf.description || '',
+            phong_ban_phu_trach: wf.phong_ban_phu_trach || wf.department || 'Kỹ Thuật',
+            loai_ap_dung: wf.loai_ap_dung || wf.types || [],
+            mau_sac: wf.mau_sac || wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
+            vat_tu_can_thiet: wf.vat_tu_can_thiet || wf.materials || undefined,
+            cac_buoc: wf.cac_buoc || wf.stages || undefined,
+            nhan_vien_duoc_giao: wf.nhan_vien_duoc_giao || wf.assignedMembers || undefined
           } as WorkflowDefinition));
           setWorkflows(workflowsList);
         } else {
@@ -187,14 +206,14 @@ export const KanbanBoard: React.FC = () => {
           if (data) {
             const workflowsList: WorkflowDefinition[] = data.map(wf => ({
               id: wf.id || '',
-              label: wf.label || '',
-              description: wf.description || '',
-              department: wf.department || 'Kỹ Thuật',
-              types: wf.types || [],
-              color: wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
-              materials: wf.materials || undefined,
-              stages: wf.stages || undefined,
-              assignedMembers: wf.assignedMembers || undefined
+              ten_quy_trinh: wf.ten_quy_trinh || wf.label || '',
+              mo_ta: wf.mo_ta || wf.description || '',
+              phong_ban_phu_trach: wf.phong_ban_phu_trach || wf.department || 'Kỹ Thuật',
+              loai_ap_dung: wf.loai_ap_dung || wf.types || [],
+              mau_sac: wf.mau_sac || wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
+              vat_tu_can_thiet: wf.vat_tu_can_thiet || wf.materials || undefined,
+              cac_buoc: wf.cac_buoc || wf.stages || undefined,
+              nhan_vien_duoc_giao: wf.nhan_vien_duoc_giao || wf.assignedMembers || undefined
             } as WorkflowDefinition));
             setWorkflows(workflowsList);
           }
@@ -233,12 +252,12 @@ export const KanbanBoard: React.FC = () => {
 
         console.log('📦 Available Services:', (services || []).map(s => ({
           id: s.id,
-          name: s.name,
-          workflowsCount: s.workflows?.length || 0,
-          workflows: s.workflows?.map(w => ({ id: w.id, order: w.order })) || []
+          name: s.ten_dich_vu,
+          workflowsCount: s.cac_buoc_quy_trinh?.length || 0,
+          workflows: s.cac_buoc_quy_trinh?.map(w => ({ id: w.id, order: w.thu_tu })) || []
         })));
 
-        console.log('📋 Available Workflows:', (workflows || []).map(w => ({ id: w.id, label: w.label })));
+        console.log('📋 Available Workflows:', (workflows || []).map(w => ({ id: w.id, label: w.ten_quy_trinh })));
 
         // Get all workflowIds from ALL workflows in services of items
         // Use Map to store workflow order for sorting
@@ -277,20 +296,20 @@ export const KanbanBoard: React.FC = () => {
                   workflows: service?.workflows?.map(w => w.id) || []
                 });
 
-                if (service && service.workflows && Array.isArray(service.workflows) && service.workflows.length > 0) {
+                if (service && service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh) && service.cac_buoc_quy_trinh.length > 0) {
                   console.log('📋 Service workflows details:', {
                     serviceId: service.id,
-                    serviceName: service.name,
-                    workflowsCount: service.workflows.length,
-                    workflows: service.workflows.map(w => ({ id: w.id, order: w.order }))
+                    serviceName: service.ten_dich_vu,
+                    workflowsCount: service.cac_buoc_quy_trinh.length,
+                    workflows: service.cac_buoc_quy_trinh.map(w => ({ id: w.id, order: w.thu_tu }))
                   });
 
                   // Add ALL workflows from this service
-                  service.workflows.forEach(wf => {
+                  service.cac_buoc_quy_trinh.forEach(wf => {
                     console.log('🔎 Trying to match workflow:', {
                       serviceWorkflowId: wf.id,
                       serviceWorkflowIdType: typeof wf.id,
-                      serviceWorkflowOrder: wf.order
+                      serviceWorkflowOrder: wf.thu_tu
                     });
 
                     // Try to find workflow by ID first (exact match)
@@ -301,7 +320,7 @@ export const KanbanBoard: React.FC = () => {
                       const wfIdTrimmed = String(wf.id || '').trim();
                       workflowExists = (workflows || []).find(w => {
                         const wId = String(w.id || '').trim();
-                        const wLabel = String(w.label || '').trim();
+                        const wLabel = String(w.ten_quy_trinh || '').trim();
                         const wfIdLower = wfIdTrimmed.toLowerCase();
                         const wIdLower = wId.toLowerCase();
                         const wLabelLower = wLabel.toLowerCase();
@@ -321,7 +340,7 @@ export const KanbanBoard: React.FC = () => {
                           console.log('✅ Found workflow by flexible matching:', {
                             serviceWorkflowId: wf.id,
                             matchedWorkflowId: w.id,
-                            matchedWorkflowLabel: w.label,
+                            matchedWorkflowLabel: w.ten_quy_trinh,
                             matchType: wId === wfIdTrimmed ? 'exact-id' :
                               wLabel === wfIdTrimmed ? 'exact-label' :
                                 wIdLower === wfIdLower ? 'case-insensitive-id' :
@@ -335,7 +354,7 @@ export const KanbanBoard: React.FC = () => {
                       console.log('✅ Found workflow by exact ID match:', {
                         serviceWorkflowId: wf.id,
                         matchedWorkflowId: workflowExists.id,
-                        matchedWorkflowLabel: workflowExists.label
+                        matchedWorkflowLabel: workflowExists.ten_quy_trinh
                       });
                     }
 
@@ -343,14 +362,14 @@ export const KanbanBoard: React.FC = () => {
                       orderWorkflowIds.add(workflowExists.id); // Use the actual workflow ID from workflows list
                       // Store order for sorting (use minimum order if workflow appears in multiple services)
                       const currentOrder = workflowOrderMap.get(workflowExists.id);
-                      if (currentOrder === undefined || wf.order < currentOrder) {
-                        workflowOrderMap.set(workflowExists.id, wf.order);
+                      if (currentOrder === undefined || wf.thu_tu < currentOrder) {
+                        workflowOrderMap.set(workflowExists.id, wf.thu_tu);
                       }
                       console.log('✅ Added workflow to orderWorkflowIds:', {
                         serviceWorkflowId: wf.id,
                         matchedWorkflowId: workflowExists.id,
-                        workflowLabel: workflowExists.label,
-                        order: wf.order
+                        workflowLabel: workflowExists.ten_quy_trinh,
+                        order: wf.thu_tu
                       });
                     } else {
                       console.warn('❌ Workflow NOT FOUND in workflows list:', {
@@ -358,25 +377,25 @@ export const KanbanBoard: React.FC = () => {
                         serviceWorkflowIdType: typeof wf.id,
                         serviceWorkflowIdValue: JSON.stringify(wf.id),
                         availableWorkflowIds: (workflows || []).map(w => w?.id).filter(Boolean),
-                        availableWorkflowLabels: (workflows || []).map(w => w?.label).filter(Boolean),
-                        allWorkflowData: (workflows || []).map(w => ({ id: w?.id, label: w?.label })).filter(w => w.id)
+                        availableWorkflowLabels: (workflows || []).map(w => w?.ten_quy_trinh).filter(Boolean),
+                        allWorkflowData: (workflows || []).map(w => ({ id: w?.id, label: w?.ten_quy_trinh })).filter(w => w.id)
                       });
                     }
                   });
                 } else if (service) {
                   console.warn('⚠️ Service has no workflows:', {
                     serviceId: service.id,
-                    serviceName: service.name,
-                    hasWorkflows: !!service.workflows,
-                    workflowsType: typeof service.workflows,
-                    workflowsIsArray: Array.isArray(service.workflows)
+                    serviceName: service.ten_dich_vu,
+                    hasWorkflows: !!service.cac_buoc_quy_trinh,
+                    workflowsType: typeof service.cac_buoc_quy_trinh,
+                    workflowsIsArray: Array.isArray(service.cac_buoc_quy_trinh)
                   });
                 } else {
                   console.warn('❌ Service not found:', {
                     itemId: item.id,
                     itemServiceId: item.serviceId,
                     availableServiceIds: (services || []).map(s => s?.id).filter(Boolean),
-                    availableServiceNames: (services || []).map(s => s?.name).filter(Boolean)
+                    availableServiceNames: (services || []).map(s => s?.ten_dich_vu).filter(Boolean)
                   });
                 }
               }
@@ -434,11 +453,11 @@ export const KanbanBoard: React.FC = () => {
           count: assignedWorkflows.length,
           workflows: assignedWorkflows.map(w => ({
             id: w.id,
-            label: w.label,
+            label: w.ten_quy_trinh,
             order: workflowOrderMap.get(w.id) ?? 999
           }))
         });
-        console.log('🎯 All Available Workflows:', (workflows || []).map(w => ({ id: w?.id, label: w?.label })).filter(w => w.id));
+        console.log('🎯 All Available Workflows:', (workflows || []).map(w => ({ id: w?.id, label: w?.ten_quy_trinh })).filter(w => w.id));
 
         return [...baseFilter, ...assignedWorkflows];
       }
@@ -454,8 +473,8 @@ export const KanbanBoard: React.FC = () => {
             .filter(item => item && !item.isProduct && item.serviceId)
             .forEach(item => {
               const service = (services || []).find(s => s && s.id === item.serviceId);
-              if (service && service.workflows && Array.isArray(service.workflows) && service.workflows.length > 0) {
-                service.workflows.forEach(wf => {
+              if (service && service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh) && service.cac_buoc_quy_trinh.length > 0) {
+                service.cac_buoc_quy_trinh.forEach(wf => {
                   // Try to find workflow by ID first
                   let workflowExists = (workflows || []).find(w => w && w.id === wf.id);
 
@@ -464,7 +483,7 @@ export const KanbanBoard: React.FC = () => {
                     const wfIdTrimmed = String(wf.id || '').trim();
                     workflowExists = (workflows || []).find(w => {
                       const wId = String(w.id || '').trim();
-                      const wLabel = String(w.label || '').trim();
+                      const wLabel = String(w.ten_quy_trinh || '').trim();
                       const wfIdLower = wfIdTrimmed.toLowerCase();
                       const wIdLower = wId.toLowerCase();
                       const wLabelLower = wLabel.toLowerCase();
@@ -484,8 +503,8 @@ export const KanbanBoard: React.FC = () => {
                     allWorkflowIds.add(workflowExists.id);
                     // Store order for sorting (use minimum order if workflow appears in multiple services)
                     const currentOrder = allWorkflowOrderMap.get(workflowExists.id);
-                    if (currentOrder === undefined || wf.order < currentOrder) {
-                      allWorkflowOrderMap.set(workflowExists.id, wf.order);
+                    if (currentOrder === undefined || wf.thu_tu < currentOrder) {
+                      allWorkflowOrderMap.set(workflowExists.id, wf.thu_tu);
                     }
                   }
                 });
@@ -505,7 +524,7 @@ export const KanbanBoard: React.FC = () => {
 
       console.log('📋 All workflows from all services (sorted):', allWorkflows.map(w => ({
         id: w.id,
-        label: w.label,
+        label: w.ten_quy_trinh,
         order: allWorkflowOrderMap.get(w.id) ?? 999
       })));
       return [...baseFilter, ...allWorkflows];
@@ -540,15 +559,15 @@ export const KanbanBoard: React.FC = () => {
           // If no workflowId but has serviceId, get from service
           if (!workflowId && item.serviceId) {
             const service = (services || []).find(s => s && s.id === item.serviceId);
-            if (service && service.workflows && Array.isArray(service.workflows) && service.workflows.length > 0) {
+            if (service && service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh) && service.cac_buoc_quy_trinh.length > 0) {
               // Get current workflow from item history, or use first workflow from service
               if (item.history && item.history.length > 0) {
                 // Try to find workflow that matches current status
                 const currentStageId = item.status;
-                const matchingWf = service.workflows.find(wf => {
+                const matchingWf = service.cac_buoc_quy_trinh.find(wf => {
                   const wfDef = (workflows || []).find(w => w && w.id === wf.id);
-                  if (wfDef && wfDef.stages) {
-                    return wfDef.stages.some(s => s.id === currentStageId);
+                  if (wfDef && wfDef.cac_buoc) {
+                    return wfDef.cac_buoc.some(s => s.id === currentStageId);
                   }
                   return false;
                 });
@@ -556,12 +575,12 @@ export const KanbanBoard: React.FC = () => {
                   workflowId = matchingWf.id;
                 } else {
                   // Use first workflow if no match
-                  const sortedWorkflows = [...service.workflows].sort((a, b) => a.order - b.order);
+                  const sortedWorkflows = [...service.cac_buoc_quy_trinh].sort((a, b) => a.thu_tu - b.thu_tu);
                   workflowId = sortedWorkflows[0].id;
                 }
               } else {
                 // No history, use first workflow
-                const sortedWorkflows = [...service.workflows].sort((a, b) => a.order - b.order);
+                const sortedWorkflows = [...service.cac_buoc_quy_trinh].sort((a, b) => a.thu_tu - b.thu_tu);
                 workflowId = sortedWorkflows[0].id;
               }
             }

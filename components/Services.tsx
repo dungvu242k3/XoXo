@@ -137,8 +137,8 @@ const CategorySidebar: React.FC<{
       <div key={category.id}>
         <div
           className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-all hover:bg-neutral-800 ${isSelected
-              ? 'bg-gold-900/20 text-gold-400 border-l-2 border-gold-500'
-              : 'text-slate-300'
+            ? 'bg-gold-900/20 text-gold-400 border-l-2 border-gold-500'
+            : 'text-slate-300'
             }`}
           style={{ paddingLeft: `${paddingLeft}px` }}
           onClick={() => onSelectCategory(isSelected ? null : category.id)}
@@ -157,17 +157,17 @@ const CategorySidebar: React.FC<{
           {!hasChildren && <div className="w-5 flex-shrink-0" />}
 
           <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${category.level === 1 ? 'bg-emerald-900/50 text-emerald-400' :
-              category.level === 2 ? 'bg-blue-900/50 text-blue-400' :
-                category.level === 3 ? 'bg-purple-900/50 text-purple-400' :
-                  'bg-orange-900/50 text-orange-400'
+            category.level === 2 ? 'bg-blue-900/50 text-blue-400' :
+              category.level === 3 ? 'bg-purple-900/50 text-purple-400' :
+                'bg-orange-900/50 text-orange-400'
             }`}>
             C{category.level}
           </span>
 
           <span className={`flex-1 truncate ${category.level === 1 ? 'font-bold text-base text-emerald-400' :
-              category.level === 2 ? 'font-semibold text-sm text-blue-400' :
-                category.level === 3 ? 'font-medium text-sm text-purple-400' :
-                  'text-sm text-orange-400'
+            category.level === 2 ? 'font-semibold text-sm text-blue-400' :
+              category.level === 3 ? 'font-medium text-sm text-purple-400' :
+                'text-sm text-orange-400'
             } ${category.color || ''}`}>
             {category.name}
           </span>
@@ -226,8 +226,8 @@ const CategorySidebar: React.FC<{
       <button
         onClick={() => onSelectCategory(null)}
         className={`w-full mb-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${selectedCategory === null
-            ? 'bg-gold-600 text-black'
-            : 'bg-neutral-800 text-slate-300 hover:bg-neutral-700'
+          ? 'bg-gold-600 text-black'
+          : 'bg-neutral-800 text-slate-300 hover:bg-neutral-700'
           }`}
       >
         Tất Cả Dịch Vụ
@@ -287,12 +287,15 @@ export const Services: React.FC = () => {
     let customIdCounter = 10000; // Start from high number to avoid conflicts
 
     servicesList.forEach(service => {
-      if (!service.categoryPath || service.categoryPath.length === 0) return;
+      // Construct path from cap_1...cap_4
+      const path = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
+
+      if (path.length === 0) return;
 
       // Build category tree from path
       let parentId: string | undefined = undefined;
 
-      service.categoryPath.forEach((pathItem, index) => {
+      path.forEach((pathItem, index) => {
         const level = index + 1; // level 1, 2, 3, 4
 
         // Tối ưu: Tìm category nhanh hơn bằng cách tạo key unique
@@ -488,14 +491,17 @@ export const Services: React.FC = () => {
 
         const mappedService = {
           id: svc.id,
-          name: svc.ten_dich_vu || '',
-          category: category,
-          categoryPath: categoryPath,
-          price: svc.gia_niem_yet || 0,
-          desc: svc.mo_ta || '',
-          image: svc.anh_dich_vu || '',
-          workflowId: svc.id_quy_trinh || '',
-          workflows: svc.cac_buoc_quy_trinh || undefined
+          ten_dich_vu: svc.ten_dich_vu || '',
+          danh_muc: category,
+          cap_1: svc.cap_1,
+          cap_2: svc.cap_2,
+          cap_3: svc.cap_3,
+          cap_4: svc.cap_4,
+          gia_niem_yet: svc.gia_niem_yet || 0,
+          mo_ta: svc.mo_ta || '',
+          anh_dich_vu: svc.anh_dich_vu || '',
+          id_quy_trinh: svc.id_quy_trinh || '',
+          cac_buoc_quy_trinh: svc.cac_buoc_quy_trinh || undefined
         };
 
         return mappedService;
@@ -562,16 +568,17 @@ export const Services: React.FC = () => {
         if (error) throw error;
 
         // Map từ tên cột tiếng Việt sang interface
+        // Map từ tên cột tiếng Việt sang interface
         const workflowsList: WorkflowDefinition[] = (data || []).map((wf: any) => ({
           id: wf.id,
-          label: wf.ten_quy_trinh || '',
-          description: wf.mo_ta || '',
-          department: wf.phong_ban_phu_trach || 'ky_thuat',
-          types: wf.loai_ap_dung || [],
-          color: wf.mau_sac || 'bg-blue-900/30 text-blue-400 border-blue-800',
-          materials: wf.vat_tu_can_thiet || undefined,
-          stages: wf.cac_buoc || undefined,
-          assignedMembers: wf.nhan_vien_duoc_giao || undefined
+          ten_quy_trinh: wf.ten_quy_trinh || '',
+          mo_ta: wf.mo_ta || '',
+          phong_ban_phu_trach: wf.phong_ban_phu_trach || 'ky_thuat',
+          loai_ap_dung: wf.loai_ap_dung || [],
+          mau_sac: wf.mau_sac || 'bg-blue-900/30 text-blue-400 border-blue-800',
+          vat_tu_can_thiet: wf.vat_tu_can_thiet || undefined,
+          cac_buoc: wf.cac_buoc || undefined,
+          nhan_vien_duoc_giao: wf.nhan_vien_duoc_giao || undefined
         }));
 
         setWorkflows(workflowsList);
@@ -615,14 +622,21 @@ export const Services: React.FC = () => {
 
   // Lấy danh sách danh mục unique
   const categories = useMemo(() => {
-    const cats = [...new Set(services.map(s => s.category))];
+    const cats = [...new Set(services.map(s => s.danh_muc))];
     return ['all', ...cats];
   }, [services]);
 
   // Helper function to check if service belongs to selected category
   const isServiceInCategory = (service: ServiceCatalogItem, categoryId: string): boolean => {
-    if (!service.categoryPath || service.categoryPath.length === 0) return false;
-    return service.categoryPath.includes(categoryId);
+    // Note: Assuming logic for checking category path still relies on implicit path construction or use explicit fields.
+    // The previous code used service.categoryPath which is removed from interface.
+    // We should use cap_1...cap_4 based on checking against categoryId logic.
+    // BUT wait, I removed categoryPath from interface?
+    // Let me check types.ts update. I removed categoryPath?
+    // Yes, I replaced it with cap_1...cap_4.
+    // So 'service.categoryPath' access is invalid.
+    const path = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
+    return path.includes(categoryId);
   };
 
   // Lọc dịch vụ theo tìm kiếm, danh mục và cấp độ - Tối ưu hiệu suất
@@ -633,13 +647,13 @@ export const Services: React.FC = () => {
     if (searchText.trim()) {
       const search = searchText.toLowerCase();
       result = result.filter(s =>
-        s.name.toLowerCase().includes(search) ||
-        (s.desc && s.desc.toLowerCase().includes(search))
+        s.ten_dich_vu.toLowerCase().includes(search) ||
+        (s.mo_ta && s.mo_ta.toLowerCase().includes(search))
       );
     }
 
     if (categoryFilter !== 'all') {
-      result = result.filter(s => s.category === categoryFilter);
+      result = result.filter(s => s.danh_muc === categoryFilter);
     }
 
     if (selectedCategory) {
@@ -659,8 +673,8 @@ export const Services: React.FC = () => {
 
       if (categoryName) {
         result = result.filter(s => {
-          if (!s.categoryPath) return false;
-          return s.categoryPath.includes(categoryName);
+          const path = [s.cap_1, s.cap_2, s.cap_3, s.cap_4].filter(Boolean) as string[];
+          return path.includes(categoryName);
         });
       }
     }
@@ -672,18 +686,18 @@ export const Services: React.FC = () => {
 
   // Render service row
   const renderServiceRow = (service: ServiceCatalogItem, index: number) => {
-    let svcWorkflows: Array<{ id: string; order: number }> = [];
-    if (service.workflows && Array.isArray(service.workflows)) {
-      svcWorkflows = service.workflows;
+    let svcWorkflows: Array<{ id: string; thu_tu: number }> = [];
+    if (service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh)) {
+      svcWorkflows = service.cac_buoc_quy_trinh;
     } else {
-      const workflowIds = Array.isArray(service.workflowId)
-        ? service.workflowId
-        : [service.workflowId].filter(Boolean);
-      svcWorkflows = workflowIds.map((id, idx) => ({ id, order: idx + 1 }));
+      const workflowIds = Array.isArray(service.id_quy_trinh)
+        ? service.id_quy_trinh
+        : [service.id_quy_trinh].filter(Boolean);
+      svcWorkflows = workflowIds.map((id, idx) => ({ id, thu_tu: idx + 1 }));
     }
 
     const sortedWorkflows = svcWorkflows
-      .sort((a, b) => a.order - b.order)
+      .sort((a, b) => a.thu_tu - b.thu_tu)
       .map(w => workflows.find(wf => wf.id === w.id))
       .filter(Boolean);
 
@@ -693,14 +707,14 @@ export const Services: React.FC = () => {
         <td className="p-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg border border-neutral-700 overflow-hidden bg-neutral-800 flex-shrink-0">
-              {service.image ? (
-                <img src={service.image} className="w-full h-full object-cover" alt={service.name} />
+              {service.anh_dich_vu ? (
+                <img src={service.anh_dich_vu} className="w-full h-full object-cover" alt={service.ten_dich_vu} />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-slate-600"><Briefcase size={16} /></div>
               )}
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-sm text-slate-200 truncate">{service.name}</div>
+              <div className="font-semibold text-sm text-slate-200 truncate">{service.ten_dich_vu}</div>
               <div className="text-[10px] text-slate-500 font-mono truncate">#{service.id.slice(0, 8)}...</div>
             </div>
           </div>
@@ -711,8 +725,8 @@ export const Services: React.FC = () => {
               sortedWorkflows.map((workflow, idx) => {
                 if (!workflow) return null;
                 return (
-                  <span key={workflow.id} className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${workflow.color}`}>
-                    {workflow.label}
+                  <span key={workflow.id} className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${workflow.mau_sac}`}>
+                    {workflow.ten_quy_trinh}
                   </span>
                 );
               })
@@ -722,11 +736,11 @@ export const Services: React.FC = () => {
           </div>
         </td>
         <td className="p-2 text-right font-bold text-gold-400 text-sm">
-          {service.price.toLocaleString()} ₫
+          {(service.gia_niem_yet || 0).toLocaleString()} ₫
         </td>
         <td className="p-2 sticky right-0 bg-neutral-900/95 backdrop-blur-sm group-hover:bg-neutral-800 transition-colors z-20">
           <ActionMenu
-            itemName={service.name}
+            itemName={service.ten_dich_vu}
             onView={() => handleViewService(service)}
             onEdit={() => handleEditService(service)}
             onDelete={() => handleDeleteService(service)}
@@ -782,7 +796,7 @@ export const Services: React.FC = () => {
 
       const workflowLabels = newService.workflows
         .sort((a, b) => a.order - b.order)
-        .map(w => workflows.find(wf => wf.id === w.id)?.label)
+        .map(w => workflows.find(wf => wf.id === w.id)?.ten_quy_trinh)
         .filter(Boolean);
 
       alert(`Thêm dịch vụ thành công!\n\nID: ${serviceId}\nTên: ${newService.name}\nDanh mục: ${newService.category}\nGiá: ${parseFloat(newService.price).toLocaleString()} ₫\nQuy trình: ${workflowLabels.join(' → ')}\n\nĐã lưu vào Supabase!`);
@@ -819,39 +833,46 @@ export const Services: React.FC = () => {
     setSelectedService(service);
     // Chuyển đổi workflowId (có thể là string hoặc string[]) thành mảng với thứ tự
     let workflowIds: string[] = [];
-    if (Array.isArray(service.workflowId)) {
-      workflowIds = service.workflowId;
-    } else if (service.workflowId) {
-      workflowIds = [service.workflowId];
+    if (Array.isArray(service.id_quy_trinh)) {
+      workflowIds = service.id_quy_trinh;
+    } else if (service.id_quy_trinh) {
+      workflowIds = [service.id_quy_trinh];
     }
 
     // Nếu service có workflows với order, dùng luôn, nếu không thì tạo mới
-    let workflows: Array<{ id: string; order: number }> = [];
-    if (service.workflows && Array.isArray(service.workflows)) {
-      workflows = service.workflows;
+    let workflows: Array<{ id: string; thu_tu: number }> = [];
+    if (service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh)) {
+      workflows = service.cac_buoc_quy_trinh;
     } else {
-      workflows = workflowIds.map((id, index) => ({ id, order: index + 1 }));
+      workflows = workflowIds.map((id, index) => ({ id, thu_tu: index + 1 }));
     }
 
     setNewService({
-      name: service.name,
-      category: service.category,
-      price: service.price.toString(),
-      desc: service.desc,
-      workflows: workflows,
-      image: service.image
+      name: service.ten_dich_vu,
+      category: service.danh_muc,
+      price: service.gia_niem_yet.toString(),
+      desc: service.mo_ta,
+      workflows: workflows.map(w => ({ id: w.id, order: w.thu_tu })), // Map back to component state naming if needed, or update component state naming too. sticking to component state 'order' for now to miss less changes.
+      image: service.anh_dich_vu
     });
 
     // Khôi phục path cho edit modal
-    // Khôi phục path cho edit modal
-    const path = service.categoryPath || findCategoryPathByName(service.category, mergedCategories);
-    if (path) {
+    const path = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
+
+    if (path.length > 0) {
       setCategoryPath(path);
       setCustomLevels({});
-    } else if (service.category) {
-      // Nếu không có trong tree, set là custom category level 0
-      setCategoryPath([service.category]);
-      setCustomLevels({ 0: true });
+    } else if (service.danh_muc) {
+      // Nếu không có trong path nhưng có danh mục (trường hợp cũ hoặc lỗi), thử tìm trong tree 
+      const foundPath = findCategoryPathByName(service.danh_muc, mergedCategories);
+      if (foundPath) {
+        setCategoryPath(foundPath);
+        setCustomLevels({});
+      } else {
+        // Nếu không có trong tree, set là custom category level 0
+        setCategoryPath([service.danh_muc]);
+        setCustomLevels({ 0: true });
+      }
     } else {
       setCategoryPath([]);
       setCustomLevels({});
@@ -907,7 +928,7 @@ export const Services: React.FC = () => {
 
       const workflowLabels = newService.workflows
         .sort((a, b) => a.order - b.order)
-        .map(w => workflows.find(wf => wf.id === w.id)?.label)
+        .map(w => workflows.find(wf => wf.id === w.id)?.ten_quy_trinh)
         .filter(Boolean);
 
       alert(`Cập nhật dịch vụ thành công!\n\nTên: ${newService.name}\nDanh mục: ${newService.category}\nGiá: ${parseFloat(newService.price).toLocaleString()} ₫\nQuy trình: ${workflowLabels.join(' → ')}\n\nĐã lưu vào Supabase!`);
@@ -968,22 +989,23 @@ export const Services: React.FC = () => {
 
     // Tìm tất cả services có categoryPath bắt đầu với category path này (bao gồm cả các cấp con)
     const servicesToUpdate = services.filter(service => {
-      if (!service.categoryPath || service.categoryPath.length === 0) return false;
+      const sPath = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
+      if (sPath.length === 0) return false;
 
       const level = categoryPath.length - 1;
       // Phải có ít nhất level + 1 phần tử trong categoryPath
-      if (service.categoryPath.length <= level) return false;
+      if (sPath.length <= level) return false;
 
       // Kiểm tra xem các phần tử từ đầu đến level có khớp không
       for (let i = 0; i <= level; i++) {
-        if (service.categoryPath[i] !== categoryPath[i]) {
+        if (sPath[i] !== categoryPath[i]) {
           return false;
         }
       }
       return true;
     });
 
-    console.log('Services to update:', servicesToUpdate.length, servicesToUpdate.map(s => ({ name: s.name, path: s.categoryPath })));
+    console.log('Services to update:', servicesToUpdate.length, servicesToUpdate.map(s => ({ name: s.ten_dich_vu, path: [s.cap_1, s.cap_2, s.cap_3, s.cap_4].filter(Boolean) })));
 
     if (servicesToUpdate.length === 0) {
       alert(`Không có dịch vụ nào thuộc danh mục "${category.name}"!\n\nĐường dẫn tìm được: ${categoryPath.join(' > ')}`);
@@ -995,7 +1017,7 @@ export const Services: React.FC = () => {
       let updatedCount = 0;
       await Promise.all(
         servicesToUpdate.map(async (service) => {
-          const updatedPath = [...service.categoryPath!];
+          const updatedPath = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
           const level = categoryPath.length - 1;
           // Cập nhật tên ở level này
           if (updatedPath[level] === category.name) {
@@ -1038,11 +1060,13 @@ export const Services: React.FC = () => {
     }
 
     // Tìm tất cả services có categoryPath chứa category này
+    // Tìm tất cả services có categoryPath chứa category này
     const servicesToUpdate = services.filter(service => {
-      if (!service.categoryPath || service.categoryPath.length === 0) return false;
+      const sPath = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
+      if (sPath.length === 0) return false;
       // Kiểm tra xem categoryPath có chứa category này không (so sánh theo tên)
       const level = categoryPath.length - 1;
-      return service.categoryPath.length > level && service.categoryPath[level] === category.name;
+      return sPath.length > level && sPath[level] === category.name;
     });
 
     if (servicesToUpdate.length > 0) {
@@ -1057,7 +1081,8 @@ export const Services: React.FC = () => {
           servicesToUpdate.map(async (service) => {
             // Xóa phần categoryPath từ vị trí category này trở đi
             const level = categoryPath.length - 1;
-            const updatedPath = service.categoryPath!.slice(0, level);
+            const sPath = [service.cap_1, service.cap_2, service.cap_3, service.cap_4].filter(Boolean) as string[];
+            const updatedPath = sPath.slice(0, level);
 
             // Cập nhật vào Supabase với tên cột tiếng Việt
             const { error } = await supabase

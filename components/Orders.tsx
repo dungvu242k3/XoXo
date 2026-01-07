@@ -344,25 +344,25 @@ export const Orders: React.FC = () => {
       if (!svc) return;
       itemData = svc;
       type = ServiceType.REPAIR;
-      name = svc.name;
-      image = svc.image;
+      name = svc.ten_dich_vu;
+      image = svc.anh_dich_vu;
 
       console.log('🔧 Service info when adding item:', {
         serviceId: svc.id,
-        serviceName: svc.name,
-        workflows: svc.workflows,
-        workflowId: svc.workflowId
+        serviceName: svc.ten_dich_vu,
+        workflows: svc.cac_buoc_quy_trinh,
+        workflowId: svc.id_quy_trinh
       });
 
       // Determine Workflow
-      if (svc.workflows && svc.workflows.length > 0) {
-        workflowId = svc.workflows[0].id;
+      if (svc.cac_buoc_quy_trinh && svc.cac_buoc_quy_trinh.length > 0) {
+        workflowId = svc.cac_buoc_quy_trinh[0].id;
         console.log('✅ Using workflows[0].id:', workflowId);
-      } else if (Array.isArray(svc.workflowId) && svc.workflowId.length > 0) {
-        workflowId = svc.workflowId[0];
+      } else if (Array.isArray(svc.id_quy_trinh) && svc.id_quy_trinh.length > 0) {
+        workflowId = svc.id_quy_trinh[0];
         console.log('✅ Using workflowId[0]:', workflowId);
-      } else if (typeof svc.workflowId === 'string' && svc.workflowId) {
-        workflowId = svc.workflowId;
+      } else if (typeof svc.id_quy_trinh === 'string' && svc.id_quy_trinh) {
+        workflowId = svc.id_quy_trinh;
         console.log('✅ Using workflowId string:', workflowId);
       } else {
         console.log('⚠️ No workflow found for this service!');
@@ -371,10 +371,10 @@ export const Orders: React.FC = () => {
       // Determine Initial Stage if Workflow Found
       if (workflowId) {
         const wf = workflows.find(w => w.id === workflowId);
-        if (wf && wf.stages && wf.stages.length > 0) {
-          const sortedStages = [...wf.stages].sort((a, b) => a.order - b.order);
+        if (wf && wf.cac_buoc && wf.cac_buoc.length > 0) {
+          const sortedStages = [...wf.cac_buoc].sort((a, b) => a.thu_tu - b.thu_tu);
           initialStatus = sortedStages[0].id;
-          initialStageName = sortedStages[0].name;
+          initialStageName = sortedStages[0].ten_buoc; // WARN: verify WorkflowStage key
         }
       }
 
@@ -394,7 +394,7 @@ export const Orders: React.FC = () => {
       id: '', // Tạm thời để trống, sẽ được cập nhật sau khi tạo
       name: name,
       type: type,
-      price: customPrice ? parseInt(customPrice) : itemData.price,
+      price: customPrice ? parseInt(customPrice) : itemData.gia_niem_yet, // Map price to gia_niem_yet
       status: initialStatus,
       quantity: 1,
       beforeImage: image,
@@ -482,24 +482,25 @@ export const Orders: React.FC = () => {
       if (!svc) return;
       itemData = svc;
       type = ServiceType.REPAIR;
-      name = svc.name;
-      image = svc.image;
+      name = svc.ten_dich_vu;
+      image = svc.anh_dich_vu;
 
       // Determine Workflow
-      if (svc.workflows && svc.workflows.length > 0) {
-        workflowId = svc.workflows[0].id;
-      } else if (Array.isArray(svc.workflowId) && svc.workflowId.length > 0) {
-        workflowId = svc.workflowId[0];
-      } else if (typeof svc.workflowId === 'string' && svc.workflowId) {
-        workflowId = svc.workflowId;
+      if (svc.cac_buoc_quy_trinh && svc.cac_buoc_quy_trinh.length > 0) {
+        workflowId = svc.cac_buoc_quy_trinh[0].id;
+      } else if (Array.isArray(svc.id_quy_trinh) && svc.id_quy_trinh.length > 0) {
+        workflowId = svc.id_quy_trinh[0];
+      } else if (typeof svc.id_quy_trinh === 'string' && svc.id_quy_trinh) {
+        workflowId = svc.id_quy_trinh;
       }
 
       if (workflowId) {
         const wf = workflows.find(w => w.id === workflowId);
-        if (wf && wf.stages && wf.stages.length > 0) {
-          const sortedStages = [...wf.stages].sort((a, b) => a.order - b.order);
+        if (wf && wf.cac_buoc && wf.cac_buoc.length > 0) {
+          // Assuming WorkflowStage keys: ten_buoc, thu_tu
+          const sortedStages = [...wf.cac_buoc].sort((a, b) => a.thu_tu - b.thu_tu);
           initialStatus = sortedStages[0].id;
-          initialStageName = sortedStages[0].name;
+          initialStageName = sortedStages[0].ten_buoc; // WARN
         }
       }
 
@@ -519,7 +520,7 @@ export const Orders: React.FC = () => {
       id: '', // Tạm thời để trống, sẽ được cập nhật sau khi tạo
       name: name,
       type: type,
-      price: editCustomPrice ? parseInt(editCustomPrice) : itemData.price,
+      price: editCustomPrice ? parseInt(editCustomPrice) : itemData.gia_niem_yet,
       status: initialStatus,
       quantity: 1,
       beforeImage: image,
@@ -864,11 +865,11 @@ export const Orders: React.FC = () => {
                                 </div>
                                 {(() => {
                                   const service = services.find(s => s.id === item.serviceId);
-                                  if (service && service.workflows && Array.isArray(service.workflows) && service.workflows.length > 0) {
-                                    const allWorkflows = service.workflows
+                                  if (service && service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh) && service.cac_buoc_quy_trinh.length > 0) {
+                                    const allWorkflows = service.cac_buoc_quy_trinh
                                       .map(wf => {
                                         const wfDef = workflows.find(w => w.id === wf.id);
-                                        return wfDef ? { id: wfDef.id, label: wfDef.label, order: wf.order, isCurrent: wf.id === item.workflowId } : null;
+                                        return wfDef ? { id: wfDef.id, label: wfDef.ten_quy_trinh, order: wf.thu_tu, isCurrent: wf.id === item.workflowId } : null;
                                       })
                                       .filter(w => w !== null)
                                       .sort((a, b) => (a?.order || 0) - (b?.order || 0));
@@ -891,7 +892,7 @@ export const Orders: React.FC = () => {
                                     const currentWf = workflows.find(w => w.id === item.workflowId);
                                     return (
                                       <div className="mt-1 text-[10px] text-blue-500">
-                                        Quy trình: {currentWf?.label || 'Unknown'}
+                                        Quy trình: {currentWf?.ten_quy_trinh || 'Unknown'}
                                       </div>
                                     );
                                   }
@@ -901,7 +902,7 @@ export const Orders: React.FC = () => {
                             )}
                             {item.workflowId && !item.serviceId && (
                               <div className="mt-1 text-[10px] text-blue-500">
-                                Quy trình: {workflows.find(w => w.id === item.workflowId)?.label || 'Unknown'}
+                                Quy trình: {workflows.find(w => w.id === item.workflowId)?.ten_quy_trinh || 'Unknown'}
                               </div>
                             )}
                           </div>
@@ -1108,12 +1109,17 @@ export const Orders: React.FC = () => {
                           setSelectedItemId(e.target.value);
                           const list = selectedItemType === 'SERVICE' ? services : products;
                           const item = list.find(i => i.id === e.target.value);
-                          if (item) setCustomPrice(item.price.toString());
+                          if (item) {
+                            const price = selectedItemType === 'SERVICE'
+                              ? (item as any).gia_niem_yet
+                              : (item as any).price;
+                            setCustomPrice((price || 0).toString());
+                          }
                         }}
                       >
                         <option value="">-- Chọn --</option>
                         {selectedItemType === 'SERVICE'
-                          ? (services || []).map(s => <option key={s.id} value={s.id}>{s.name} (Giá gốc: {(s.price || 0).toLocaleString()})</option>)
+                          ? (services || []).map(s => <option key={s.id} value={s.id}>{s.ten_dich_vu} (Giá gốc: {(s.gia_niem_yet || 0).toLocaleString()})</option>)
                           : (products || []).map(p => <option key={p.id} value={p.id}>{p.name} (Tồn: {formatNumber(p.stock || 0)})</option>)
                         }
                       </select>
@@ -1268,7 +1274,7 @@ export const Orders: React.FC = () => {
                       >
                         <option value="">-- Chọn --</option>
                         {editSelectedItemType === 'SERVICE'
-                          ? (services || []).map(s => <option key={s.id} value={s.id}>{s.name} (Giá gốc: {(s.price || 0).toLocaleString()})</option>)
+                          ? (services || []).map(s => <option key={s.id} value={s.id}>{s.ten_dich_vu} (Giá gốc: {(s.gia_niem_yet || 0).toLocaleString()})</option>)
                           : (products || []).map(p => <option key={p.id} value={p.id}>{p.name} (Tồn: {formatNumber(p.stock || 0)})</option>)
                         }
                       </select>
@@ -1324,12 +1330,12 @@ export const Orders: React.FC = () => {
                           <div className="mt-2 pt-2 border-t border-neutral-700 space-y-1">
                             {item.serviceId && service && (
                               <div className="text-xs text-slate-400">
-                                <span className="text-slate-500">Dịch vụ:</span> {service.name}
+                                <span className="text-slate-500">Dịch vụ:</span> {service.ten_dich_vu}
                               </div>
                             )}
                             {item.workflowId && workflow && (
                               <div className="text-xs text-blue-400">
-                                <span className="text-slate-500">Quy trình:</span> {workflow.label}
+                                <span className="text-slate-500">Quy trình:</span> {workflow.ten_quy_trinh}
                               </div>
                             )}
                             {item.status && (

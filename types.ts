@@ -150,14 +150,14 @@ export interface WorkflowStage {
 
 export interface WorkflowDefinition {
   id: string;
-  label: string;
-  types: ServiceType[];
-  description?: string;
-  color: string;
-  department: 'Kỹ Thuật' | 'Spa' | 'QA/QC' | 'Hậu Cần';
-  materials?: WorkflowMaterial[];
-  stages?: WorkflowStage[];
-  assignedMembers?: string[]; // Array of member IDs
+  ten_quy_trinh: string;
+  loai_ap_dung: ServiceType[];
+  mo_ta?: string;
+  mau_sac: string;
+  phong_ban_phu_trach: 'Kỹ Thuật' | 'Spa' | 'QA/QC' | 'Hậu Cần';
+  vat_tu_can_thiet?: WorkflowMaterial[];
+  cac_buoc?: WorkflowStage[];
+  nhan_vien_duoc_giao?: string[];
 }
 
 export interface ServiceCategory {
@@ -172,16 +172,20 @@ export interface ServiceCategory {
 
 export interface ServiceCatalogItem {
   id: string;
-  name: string;
-  category: string;
-  categoryPath?: string[]; // Đường dẫn category từ cấp 1 đến cấp 4
-
-  price: number;
-  desc: string;
-  image: string;
-  workflowId: string | string[]; // Có thể là một hoặc nhiều quy trình
-  workflows?: { id: string; order: number }[]; // Cấu trúc mới có thứ tự
+  ten_dich_vu: string; // name
+  danh_muc: string; // category
+  cap_1?: string;
+  cap_2?: string;
+  cap_3?: string;
+  cap_4?: string;
+  gia_niem_yet: number; // price
+  mo_ta: string; // desc
+  anh_dich_vu: string; // image
+  id_quy_trinh: string | string[]; // workflowId
+  cac_buoc_quy_trinh?: { id: string; thu_tu: number }[]; // workflows
 }
+
+
 
 export interface Product {
   id: string;

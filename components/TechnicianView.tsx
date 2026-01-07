@@ -39,17 +39,17 @@ const getWorkflowStages = (serviceId?: string, workflows?: WorkflowDefinition[],
   let workflowId: string | undefined;
 
   // Check for new workflows format (array of {id, order})
-  if ('workflows' in service && Array.isArray(service.workflows) && service.workflows.length > 0) {
+  if (service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh) && service.cac_buoc_quy_trinh.length > 0) {
     // Sort by order and get first one
-    const sortedWorkflows = [...service.workflows].sort((a, b) => a.order - b.order);
+    const sortedWorkflows = [...service.cac_buoc_quy_trinh].sort((a, b) => a.thu_tu - b.thu_tu);
     workflowId = sortedWorkflows[0].id;
   }
   // Check for old workflowId format
-  else if ('workflowId' in service) {
-    if (typeof service.workflowId === 'string') {
-      workflowId = service.workflowId;
-    } else if (Array.isArray(service.workflowId) && service.workflowId.length > 0) {
-      workflowId = service.workflowId[0];
+  else if (service.id_quy_trinh) {
+    if (typeof service.id_quy_trinh === 'string') {
+      workflowId = service.id_quy_trinh;
+    } else if (Array.isArray(service.id_quy_trinh) && service.id_quy_trinh.length > 0) {
+      workflowId = service.id_quy_trinh[0];
     }
   }
 
@@ -58,9 +58,9 @@ const getWorkflowStages = (serviceId?: string, workflows?: WorkflowDefinition[],
   // Find workflow from provided workflows
   const workflowList = workflows || [];
   const workflow = workflowList.find(wf => wf.id === workflowId);
-  if (!workflow || !workflow.stages || workflow.stages.length === 0) return null;
+  if (!workflow || !workflow.cac_buoc || workflow.cac_buoc.length === 0) return null;
 
-  return workflow.stages.sort((a, b) => a.order - b.order);
+  return workflow.cac_buoc.sort((a, b) => a.order - b.order);
 };
 
 // Filter options will be generated dynamically from workflows
@@ -141,14 +141,14 @@ export const TechnicianView: React.FC = () => {
         if (!error && data) {
           const workflowsList: WorkflowDefinition[] = data.map(wf => ({
             id: wf.id || '',
-            label: wf.label || '',
-            description: wf.description || '',
-            department: wf.department || 'Kỹ Thuật',
-            types: wf.types || [],
-            color: wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
-            materials: wf.materials || undefined,
-            stages: wf.stages || undefined,
-            assignedMembers: wf.assignedMembers || undefined
+            ten_quy_trinh: wf.ten_quy_trinh || wf.label || '',
+            mo_ta: wf.mo_ta || wf.description || '',
+            phong_ban_phu_trach: wf.phong_ban_phu_trach || wf.department || 'Kỹ Thuật',
+            loai_ap_dung: wf.loai_ap_dung || wf.types || [],
+            mau_sac: wf.mau_sac || wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
+            vat_tu_can_thiet: wf.vat_tu_can_thiet || wf.materials || undefined,
+            cac_buoc: wf.cac_buoc || wf.stages || undefined,
+            nhan_vien_duoc_giao: wf.nhan_vien_duoc_giao || wf.assignedMembers || undefined
           } as WorkflowDefinition));
           setWorkflows(workflowsList);
         } else {
@@ -178,14 +178,14 @@ export const TechnicianView: React.FC = () => {
           if (data) {
             const workflowsList: WorkflowDefinition[] = data.map(wf => ({
               id: wf.id || '',
-              label: wf.label || '',
-              description: wf.description || '',
-              department: wf.department || 'Kỹ Thuật',
-              types: wf.types || [],
-              color: wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
-              materials: wf.materials || undefined,
-              stages: wf.stages || undefined,
-              assignedMembers: wf.assignedMembers || undefined
+              ten_quy_trinh: wf.ten_quy_trinh || wf.label || '',
+              mo_ta: wf.mo_ta || wf.description || '',
+              phong_ban_phu_trach: wf.phong_ban_phu_trach || wf.department || 'Kỹ Thuật',
+              loai_ap_dung: wf.loai_ap_dung || wf.types || [],
+              mau_sac: wf.mau_sac || wf.color || 'bg-blue-900/30 text-blue-400 border-blue-800',
+              vat_tu_can_thiet: wf.vat_tu_can_thiet || wf.materials || undefined,
+              cac_buoc: wf.cac_buoc || wf.stages || undefined,
+              nhan_vien_duoc_giao: wf.nhan_vien_duoc_giao || wf.assignedMembers || undefined
             } as WorkflowDefinition));
             setWorkflows(workflowsList);
           }
@@ -216,12 +216,17 @@ export const TechnicianView: React.FC = () => {
             const serviceId = svc.id || '';
             mergedServices.set(serviceId, {
               id: serviceId,
-              name: svc.name || '',
-              category: svc.category || '',
-              price: svc.price || 0,
-              desc: svc.desc || '',
-              image: svc.image || '',
-              workflows: svc.workflows || (svc.workflowId ? (Array.isArray(svc.workflowId) ? svc.workflowId.map((id: string, idx: number) => ({ id, order: idx })) : [{ id: svc.workflowId, order: 0 }]) : [])
+              ten_dich_vu: svc.ten_dich_vu || svc.name || '',
+              danh_muc: svc.danh_muc || svc.category || '',
+              cap_1: svc.cap_1,
+              cap_2: svc.cap_2,
+              cap_3: svc.cap_3,
+              cap_4: svc.cap_4,
+              gia_niem_yet: svc.gia_niem_yet || svc.price || 0,
+              mo_ta: svc.mo_ta || svc.desc || '',
+              anh_dich_vu: svc.anh_dich_vu || svc.image || '',
+              id_quy_trinh: svc.id_quy_trinh || svc.workflowId || '',
+              cac_buoc_quy_trinh: svc.cac_buoc_quy_trinh || svc.workflows || (svc.workflowId ? (Array.isArray(svc.workflowId) ? svc.workflowId.map((id: string, idx: number) => ({ id, thu_tu: idx + 1 })) : [{ id: svc.workflowId, thu_tu: 1 }]) : undefined)
             } as ServiceCatalogItem);
           });
         }
@@ -255,12 +260,17 @@ export const TechnicianView: React.FC = () => {
               const serviceId = svc.id || '';
               mergedServices.set(serviceId, {
                 id: serviceId,
-                name: svc.name || '',
-                category: svc.category || '',
-                price: svc.price || 0,
-                desc: svc.desc || '',
-                image: svc.image || '',
-                workflows: svc.workflows || (svc.workflowId ? (Array.isArray(svc.workflowId) ? svc.workflowId.map((id: string, idx: number) => ({ id, order: idx })) : [{ id: svc.workflowId, order: 0 }]) : [])
+                ten_dich_vu: svc.ten_dich_vu || svc.name || '',
+                danh_muc: svc.danh_muc || svc.category || '',
+                cap_1: svc.cap_1,
+                cap_2: svc.cap_2,
+                cap_3: svc.cap_3,
+                cap_4: svc.cap_4,
+                gia_niem_yet: svc.gia_niem_yet || svc.price || 0,
+                mo_ta: svc.mo_ta || svc.desc || '',
+                anh_dich_vu: svc.anh_dich_vu || svc.image || '',
+                id_quy_trinh: svc.id_quy_trinh || svc.workflowId || '',
+                cac_buoc_quy_trinh: svc.cac_buoc_quy_trinh || svc.workflows || (svc.workflowId ? (Array.isArray(svc.workflowId) ? svc.workflowId.map((id: string, idx: number) => ({ id, thu_tu: idx + 1 })) : [{ id: svc.workflowId, thu_tu: 1 }]) : undefined)
               } as ServiceCatalogItem);
             });
             setServices(Array.from(mergedServices.values()));
@@ -299,8 +309,8 @@ export const TechnicianView: React.FC = () => {
 
     // Collect all unique stages from all workflows
     workflows.forEach(workflow => {
-      if (workflow.stages && workflow.stages.length > 0) {
-        workflow.stages.forEach(stage => {
+      if (workflow.cac_buoc && workflow.cac_buoc.length > 0) {
+        workflow.cac_buoc.forEach(stage => {
           if (!allStages.has(stage.id)) {
             allStages.set(stage.id, stage.name);
           }
@@ -473,18 +483,18 @@ export const TechnicianView: React.FC = () => {
         // Check for next workflow
         if (activeTask.serviceId && activeTask.workflowId) {
           const service = services.find(s => s.id === activeTask.serviceId);
-          if (service && service.workflows && Array.isArray(service.workflows) && service.workflows.length > 0) {
+          if (service && service.cac_buoc_quy_trinh && Array.isArray(service.cac_buoc_quy_trinh) && service.cac_buoc_quy_trinh.length > 0) {
             // Find current workflow index
-            const currentWfIndex = service.workflows.findIndex(wf => wf.id === activeTask.workflowId);
+            const currentWfIndex = service.cac_buoc_quy_trinh.findIndex(wf => wf.id === activeTask.workflowId);
 
-            if (currentWfIndex !== -1 && currentWfIndex < service.workflows.length - 1) {
+            if (currentWfIndex !== -1 && currentWfIndex < service.cac_buoc_quy_trinh.length - 1) {
               // There's a next workflow - move to it
-              const nextWfConfig = service.workflows[currentWfIndex + 1];
+              const nextWfConfig = service.cac_buoc_quy_trinh[currentWfIndex + 1];
               const nextWf = workflows.find(w => w.id === nextWfConfig.id);
 
-              if (nextWf && nextWf.stages && nextWf.stages.length > 0) {
+              if (nextWf && nextWf.cac_buoc && nextWf.cac_buoc.length > 0) {
                 // Find first stage of next workflow
-                const sortedStages = [...nextWf.stages].sort((a, b) => a.order - b.order);
+                const sortedStages = [...nextWf.cac_buoc].sort((a, b) => a.order - b.order);
                 const firstStage = sortedStages[0];
 
                 // Update order with new workflow
@@ -544,7 +554,7 @@ export const TechnicianView: React.FC = () => {
 
                   const cleanedOrder = removeUndefined({ ...order, items: updatedItems });
                   await updateOrder(order.id, cleanedOrder);
-                  alert(`Đã chuyển sang quy trình: ${nextWf.label} (Bước: ${firstStage.name})`);
+                  alert(`Đã chuyển sang quy trình: ${nextWf.ten_quy_trinh} (Bước: ${firstStage.name})`);
                   return; // Exit early, don't mark as done
                 }
               } else {
