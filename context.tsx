@@ -100,7 +100,79 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // ... (Keep intermediate code if any, but mappings are adjacent)
 
   // Mapping functions for database values to frontend display values
-  // ... (Keep existing mapping functions for Department and Role)
+  // Mapping functions for database values to frontend display values
+
+  // Maps for bidirectional lookup
+  // Helper objects to ensure consistency. keys are both Frontend and DB values for easy lookup if needed, 
+  // but primarilly we want predictable transformation.
+
+  const roleToDb: Record<string, string> = {
+    'Tư vấn viên': 'tu_van',
+    'Kỹ thuật viên': 'ky_thuat',
+    'QC': 'qc',
+    'Quản lý': 'quan_ly'
+  };
+
+  const roleToDisplay: Record<string, string> = {
+    'tu_van': 'Tư vấn viên',
+    'ky_thuat': 'Kỹ thuật viên',
+    'qc': 'QC',
+    'quan_ly': 'Quản lý'
+  };
+
+  const statusToDb: Record<string, string> = {
+    'Active': 'hoat_dong',
+    'Off': 'nghi'
+  };
+
+  const statusToDisplay: Record<string, string> = {
+    'hoat_dong': 'Active',
+    'nghi': 'Off'
+  };
+
+  const deptToDb: Record<string, string> = {
+    'Kỹ Thuật': 'ky_thuat',
+    'Spa': 'spa',
+    'QA/QC': 'qc',
+    'Hậu Cần': 'hau_can',
+    'Quản Lý': 'quan_ly',
+    'Kinh Doanh': 'kinh_doanh'
+  };
+
+  const deptToDisplay: Record<string, string> = {
+    'ky_thuat': 'Kỹ Thuật',
+    'spa': 'Spa',
+    'qc': 'QA/QC',
+    'hau_can': 'Hậu Cần',
+    'quan_ly': 'Quản Lý',
+    'kinh_doanh': 'Kinh Doanh'
+  };
+
+  const mapRoleDisplayToDb = (displayRole: string): string => {
+    return roleToDb[displayRole] || 'tu_van';
+  };
+
+  const mapStatusDisplayToDb = (displayStatus: string): string => {
+    return statusToDb[displayStatus] || 'hoat_dong';
+  };
+
+  const mapDepartmentDisplayToDb = (displayDepartment?: string): string => {
+    return (displayDepartment && deptToDb[displayDepartment]) || 'hau_can';
+  };
+
+  const mapVietnameseMemberToEnglish = (vnMember: any): Member => {
+    return {
+      id: vnMember.id,
+      name: vnMember.ho_ten,
+      role: roleToDisplay[vnMember.vai_tro] || vnMember.vai_tro,
+      phone: vnMember.sdt,
+      email: vnMember.email || '',
+      status: (statusToDisplay[vnMember.trang_thai] || 'Active') as 'Active' | 'Off',
+      avatar: vnMember.anh_dai_dien,
+      specialty: vnMember.chuyen_mon,
+      department: deptToDisplay[vnMember.phong_ban] || vnMember.phong_ban
+    };
+  };
 
   const mapVietnameseProductToEnglish = (vnItem: any): Product => {
     return {

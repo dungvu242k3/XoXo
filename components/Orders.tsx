@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { ArrowLeft, CheckSquare, ChevronDown, Download, Edit, Eye, FileText, Image as ImageIcon, MoreHorizontal, Package, Plus, Printer, QrCode, Search, Square, Trash2, Upload, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Table, MoreHorizontal, QrCode, FileText, Image as ImageIcon, Printer, X, CheckSquare, Square, ShoppingBag, Package, Eye, Edit, Trash2, Download, Upload, ArrowLeft, ChevronDown, Check } from 'lucide-react';
-import { Order, OrderStatus, ServiceType, ServiceItem, ServiceCatalogItem, WorkflowDefinition } from '../types';
 import { useAppStore } from '../context';
-import { TableFilter, FilterState, filterByDateRange } from './TableFilter';
-import { supabase, DB_PATHS } from '../supabase';
+import { DB_PATHS, supabase } from '../supabase';
+import { Order, OrderStatus, ServiceCatalogItem, ServiceItem, ServiceType, WorkflowDefinition } from '../types';
 
 // Utility for formatting currency
 const formatCurrency = (amount: number) => {
@@ -455,8 +454,8 @@ export const Orders: React.FC = () => {
       totalAmount: totalAmount,
       deposit: 0,
       status: OrderStatus.PENDING,
-      createdAt: new Date().toLocaleDateString('vi-VN'),
-      expectedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('vi-VN'),
+      createdAt: new Date().toISOString().split('T')[0],
+      expectedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       notes: ''
     };
 
@@ -573,7 +572,7 @@ export const Orders: React.FC = () => {
     // Clean items to remove undefined values and update IDs to format: {orderId}-{serviceId}
     const cleanedItems = editOrderItems.map(item => {
       // Generate ID as {orderId}-{serviceId} if serviceId exists
-      const itemId = item.serviceId 
+      const itemId = item.serviceId
         ? `${editingOrder.id}-${item.serviceId}`
         : item.id;
 
@@ -820,8 +819,9 @@ export const Orders: React.FC = () => {
                     <QrCode size={18} /> Danh Sách Dịch Vụ & Sản Phẩm
                   </h3>
                   <div className="space-y-4">
-                    {selectedOrder.items.map((item) => {
+                    {(selectedOrder.items || []).map((item) => {
                       // Find stage name if possible
+
                       let statusLabel = item.status;
                       // Try to find status in workflows
                       if (item.workflowId) {
@@ -872,7 +872,7 @@ export const Orders: React.FC = () => {
                                       })
                                       .filter(w => w !== null)
                                       .sort((a, b) => (a?.order || 0) - (b?.order || 0));
-                                    
+
                                     return (
                                       <div className="mt-2 space-y-1">
                                         <div className="text-[10px] text-slate-500 font-semibold uppercase">Tất cả quy trình:</div>
@@ -906,8 +906,9 @@ export const Orders: React.FC = () => {
                             )}
                           </div>
                           <div className="text-right">
-                            <div className="font-medium text-slate-300">{item.price.toLocaleString()} ₫</div>
+                            <div className="font-medium text-slate-300">{(item.price || 0).toLocaleString()} ₫</div>
                           </div>
+
                         </div>
                       );
                     })}
@@ -944,19 +945,19 @@ export const Orders: React.FC = () => {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-slate-500">Tạm tính</span>
-                      <span className="text-slate-300">{selectedOrder.totalAmount.toLocaleString()} ₫</span>
+                      <span className="text-slate-300">{(selectedOrder.totalAmount || 0).toLocaleString()} ₫</span>
                     </div>
                     <div className="flex justify-between font-bold text-slate-200 pt-2 border-t border-neutral-700">
                       <span>Tổng cộng</span>
-                      <span>{selectedOrder.totalAmount.toLocaleString()} ₫</span>
+                      <span>{(selectedOrder.totalAmount || 0).toLocaleString()} ₫</span>
                     </div>
                     <div className="flex justify-between text-gold-500">
                       <span>Đã cọc</span>
-                      <span>-{selectedOrder.deposit.toLocaleString()} ₫</span>
+                      <span>-{(selectedOrder.deposit || 0).toLocaleString()} ₫</span>
                     </div>
                     <div className="flex justify-between font-bold text-red-500 pt-2">
                       <span>Còn lại</span>
-                      <span>{(selectedOrder.totalAmount - selectedOrder.deposit).toLocaleString()} ₫</span>
+                      <span>{((selectedOrder.totalAmount || 0) - (selectedOrder.deposit || 0)).toLocaleString()} ₫</span>
                     </div>
                   </div>
                 </div>
@@ -1061,7 +1062,7 @@ export const Orders: React.FC = () => {
                   onChange={(e) => setSelectedCustomerId(e.target.value)}
                 >
                   <option value="">-- Chọn khách hàng --</option>
-                  {customers.map(c => (
+                  {(customers || []).map(c => (
                     <option key={c.id} value={c.id}>{c.name} - {c.phone} ({c.tier})</option>
                   ))}
                 </select>
@@ -1112,8 +1113,8 @@ export const Orders: React.FC = () => {
                       >
                         <option value="">-- Chọn --</option>
                         {selectedItemType === 'SERVICE'
-                          ? services.map(s => <option key={s.id} value={s.id}>{s.name} (Giá gốc: {s.price.toLocaleString()})</option>)
-                          : products.map(p => <option key={p.id} value={p.id}>{p.name} (Tồn: {formatNumber(p.stock)})</option>)
+                          ? (services || []).map(s => <option key={s.id} value={s.id}>{s.name} (Giá gốc: {(s.price || 0).toLocaleString()})</option>)
+                          : (products || []).map(p => <option key={p.id} value={p.id}>{p.name} (Tồn: {formatNumber(p.stock || 0)})</option>)
                         }
                       </select>
                     </div>
@@ -1215,7 +1216,7 @@ export const Orders: React.FC = () => {
                   onChange={(e) => setEditSelectedCustomerId(e.target.value)}
                 >
                   <option value="">-- Chọn khách hàng --</option>
-                  {customers.map(c => (
+                  {(customers || []).map(c => (
                     <option key={c.id} value={c.id}>{c.name} - {c.phone} ({c.tier})</option>
                   ))}
                 </select>
@@ -1267,8 +1268,8 @@ export const Orders: React.FC = () => {
                       >
                         <option value="">-- Chọn --</option>
                         {editSelectedItemType === 'SERVICE'
-                          ? services.map(s => <option key={s.id} value={s.id}>{s.name} (Giá gốc: {s.price.toLocaleString()})</option>)
-                          : products.map(p => <option key={p.id} value={p.id}>{p.name} (Tồn: {formatNumber(p.stock)})</option>)
+                          ? (services || []).map(s => <option key={s.id} value={s.id}>{s.name} (Giá gốc: {(s.price || 0).toLocaleString()})</option>)
+                          : (products || []).map(p => <option key={p.id} value={p.id}>{p.name} (Tồn: {formatNumber(p.stock || 0)})</option>)
                         }
                       </select>
                     </div>
@@ -1297,7 +1298,7 @@ export const Orders: React.FC = () => {
                   {editOrderItems.map((item, idx) => {
                     const service = item.serviceId ? services.find(s => s.id === item.serviceId) : null;
                     const workflow = item.workflowId ? workflows.find(w => w.id === item.workflowId) : null;
-                    
+
                     return (
                       <div key={idx} className="p-3 bg-neutral-800/50 rounded-lg border border-neutral-700 text-sm">
                         <div className="flex justify-between items-center">
@@ -1317,7 +1318,7 @@ export const Orders: React.FC = () => {
                             </button>
                           </div>
                         </div>
-                        
+
                         {/* Hiển thị thông tin quy trình đã chọn */}
                         {!item.isProduct && (
                           <div className="mt-2 pt-2 border-t border-neutral-700 space-y-1">
@@ -1359,11 +1360,11 @@ export const Orders: React.FC = () => {
                 <div>
                   <label className="block text-sm font-bold text-slate-300 mb-2">Ngày Trả Dự Kiến</label>
                   <input
-                    type="text"
+                    type="date"
                     value={editExpectedDelivery}
                     onChange={(e) => setEditExpectedDelivery(e.target.value)}
                     className="w-full p-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-1 focus:ring-gold-500 outline-none"
-                    placeholder="dd/mm/yyyy"
+                    placeholder="yyyy-mm-dd"
                   />
                 </div>
               </div>
