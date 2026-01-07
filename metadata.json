@@ -1,0 +1,7 @@
+{
+  "name": "XOXO ERP/CRM",
+  "description": "A luxury ERP/CRM system for Spa & Repair Centers specializing in high-end leather goods, bags, and shoes.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
