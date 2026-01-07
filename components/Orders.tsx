@@ -1369,7 +1369,8 @@ export const Orders: React.FC = () => {
                     type="date"
                     value={editExpectedDelivery}
                     onChange={(e) => setEditExpectedDelivery(e.target.value)}
-                    className="w-full p-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-1 focus:ring-gold-500 outline-none"
+                    onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
+                    className="w-full p-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-1 focus:ring-gold-500 outline-none relative z-10 cursor-pointer"
                     placeholder="yyyy-mm-dd"
                   />
                 </div>

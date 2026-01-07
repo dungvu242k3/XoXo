@@ -1116,7 +1116,7 @@ export const Services: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa dịch vụ "${service.name}"?`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa dịch vụ "${service.ten_dich_vu}"?`)) {
       return;
     }
 
@@ -1192,16 +1192,16 @@ export const Services: React.FC = () => {
               <div className="p-6 space-y-6">
                 <div className="flex gap-6">
                   <div className="w-32 h-32 rounded-lg bg-neutral-800 overflow-hidden flex-shrink-0 border border-neutral-700">
-                    <img src={selectedService.image} alt={selectedService.name} className="w-full h-full object-cover opacity-80" />
+                    <img src={selectedService.anh_dich_vu} alt={selectedService.ten_dich_vu} className="w-full h-full object-cover opacity-80" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold text-2xl text-slate-100 mb-2">{selectedService.name}</h3>
+                    <h3 className="font-bold text-2xl text-slate-100 mb-2">{selectedService.ten_dich_vu}</h3>
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="text-slate-400 bg-neutral-800 px-3 py-1 rounded border border-neutral-700">{selectedService.category}</span>
+                      <span className="text-slate-400 bg-neutral-800 px-3 py-1 rounded border border-neutral-700">{selectedService.danh_muc}</span>
                       <span className="font-mono text-slate-600 text-sm">#{selectedService.id}</span>
                     </div>
                     <div className="font-bold text-2xl text-gold-500">
-                      {selectedService.price.toLocaleString()} ₫
+                      {selectedService.gia_niem_yet.toLocaleString()} ₫
                     </div>
                   </div>
                 </div>
@@ -1238,8 +1238,8 @@ export const Services: React.FC = () => {
                                     {w.order}
                                   </div>
                                   <Layers size={14} />
-                                  <span className="font-semibold text-sm">{workflow.label}</span>
-                                  <span className="text-xs opacity-75">({workflow.department})</span>
+                                  <span className="font-semibold text-sm">{workflow.ten_quy_trinh}</span>
+                                  <span className="text-xs opacity-75">({workflow.phong_ban_phu_trach})</span>
                                 </div>
                               ) : null;
                             })}
@@ -1251,7 +1251,7 @@ export const Services: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-400 mb-2">Mô tả</label>
                     <p className="text-slate-300 bg-neutral-800 p-4 rounded-lg border border-neutral-700 whitespace-pre-wrap">
-                      {selectedService.desc || 'Không có mô tả'}
+                      {selectedService.mo_ta || 'Không có mô tả'}
                     </p>
                   </div>
                 </div>
@@ -1424,9 +1424,9 @@ export const Services: React.FC = () => {
                         .filter(wf => {
                           if (!workflowSearch.trim()) return true;
                           const search = workflowSearch.toLowerCase();
-                          return wf.label.toLowerCase().includes(search) ||
-                            wf.department.toLowerCase().includes(search) ||
-                            (wf.description && wf.description.toLowerCase().includes(search));
+                          return (wf.ten_quy_trinh || '').toLowerCase().includes(search) ||
+                            (wf.phong_ban_phu_trach || '').toLowerCase().includes(search) ||
+                            (wf.mo_ta && wf.mo_ta.toLowerCase().includes(search));
                         })
                         .map(wf => {
                           const isSelected = newService.workflows.some(w => w.id === wf.id);
@@ -1458,13 +1458,13 @@ export const Services: React.FC = () => {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <Layers size={14} className="text-gold-500" />
-                                  <span className="text-sm font-medium text-slate-300">{wf.label}</span>
-                                  <span className={`px-2 py-0.5 rounded text-xs border ${wf.color}`}>
-                                    {wf.department}
+                                  <span className="text-sm font-medium text-slate-300">{wf.ten_quy_trinh}</span>
+                                  <span className={`px-2 py-0.5 rounded text-xs border ${wf.mau_sac}`}>
+                                    {wf.phong_ban_phu_trach}
                                   </span>
                                 </div>
-                                {wf.description && (
-                                  <p className="text-xs text-slate-500 mt-1">{wf.description}</p>
+                                {wf.mo_ta && (
+                                  <p className="text-xs text-slate-500 mt-1">{wf.mo_ta}</p>
                                 )}
                               </div>
                             </label>
@@ -1493,9 +1493,9 @@ export const Services: React.FC = () => {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <Layers size={14} className="text-gold-500" />
-                                  <span className="text-sm font-medium text-slate-300">{wf.label}</span>
-                                  <span className={`px-2 py-0.5 rounded text-xs border ${wf.color}`}>
-                                    {wf.department}
+                                  <span className="text-sm font-medium text-slate-300">{wf.ten_quy_trinh}</span>
+                                  <span className={`px-2 py-0.5 rounded text-xs border ${wf.mau_sac}`}>
+                                    {wf.phong_ban_phu_trach}
                                   </span>
                                 </div>
                               </div>
@@ -1815,9 +1815,9 @@ export const Services: React.FC = () => {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <Layers size={14} className="text-gold-500" />
-                                  <span className="text-sm font-medium text-slate-300">{wf.label}</span>
-                                  <span className={`px-2 py-0.5 rounded text-xs border ${wf.color}`}>
-                                    {wf.department}
+                                  <span className="text-sm font-medium text-slate-300">{wf.ten_quy_trinh}</span>
+                                  <span className={`px-2 py-0.5 rounded text-xs border ${wf.mau_sac}`}>
+                                    {wf.phong_ban_phu_trach}
                                   </span>
                                 </div>
                               </div>
@@ -2035,14 +2035,14 @@ export const Services: React.FC = () => {
                         <td className="p-4">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-lg border border-neutral-700 overflow-hidden bg-neutral-800 flex-shrink-0">
-                              {service.image ? (
-                                <img src={service.image} className="w-full h-full object-cover" alt={service.name} />
+                              {service.anh_dich_vu ? (
+                                <img src={service.anh_dich_vu} className="w-full h-full object-cover" alt={service.ten_dich_vu} />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-600"><Briefcase size={20} /></div>
                               )}
                             </div>
                             <div>
-                              <div className="font-bold text-slate-200">{service.name}</div>
+                              <div className="font-bold text-slate-200">{service.ten_dich_vu}</div>
                               <div className="text-xs text-slate-500 font-mono mt-0.5">#{service.id}</div>
                             </div>
                           </div>
@@ -2053,8 +2053,8 @@ export const Services: React.FC = () => {
                               sortedWorkflows.map((workflow, idx) => {
                                 if (!workflow) return null;
                                 return (
-                                  <span key={workflow.id} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${workflow.color}`}>
-                                    {workflow.label}
+                                  <span key={workflow.id} className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${workflow.mau_sac}`}>
+                                    {workflow.ten_quy_trinh}
                                   </span>
                                 );
                               })
@@ -2064,11 +2064,11 @@ export const Services: React.FC = () => {
                           </div>
                         </td>
                         <td className="p-4 text-right font-bold text-gold-400">
-                          {service.price.toLocaleString()} ₫
+                          {service.gia_niem_yet.toLocaleString()} ₫
                         </td>
                         <td className="p-4 sticky right-0 bg-neutral-900/95 backdrop-blur-sm group-hover:bg-neutral-800 transition-colors z-20">
                           <ActionMenu
-                            itemName={service.name}
+                            itemName={service.ten_dich_vu}
                             onView={() => handleViewService(service)}
                             onEdit={() => handleEditService(service)}
                             onDelete={() => handleDeleteService(service)}
