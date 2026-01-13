@@ -938,9 +938,8 @@ export const KanbanBoard: React.FC = () => {
 
           // Generate ID as {orderId}-{serviceId} if serviceId exists
           // Otherwise use existing item.id
-          const itemId = item.serviceId
-            ? `${order.id}-${item.serviceId}`
-            : item.id;
+          // Fix 406 error: Always use the real database ID
+          const itemId = item.id;
 
           return {
             ...item,
@@ -1477,8 +1476,34 @@ export const KanbanBoard: React.FC = () => {
     // If oldIndex is -1, the item's current status doesn't match any column
     // This can happen with legacy data or items from different workflows
     // In this case, allow the move (treat as forward move)
+
+    // Helper for optimistic update
+    const optimisticUpdate = (orderId: string, itemId: string, targetStatus: string) => {
+      setOrders(prevOrders => prevOrders.map(order => {
+        if (order.id !== orderId) return order;
+        return {
+          ...order,
+          items: order.items.map(item => {
+            if (item.id !== itemId) return item;
+            return {
+              ...item,
+              status: targetStatus,
+              history: [...(item.history || []), {
+                stageId: targetStatus,
+                stageName: targetStatus, // Temporary, will be refetched
+                enteredAt: Date.now(),
+                performedBy: CURRENT_USER.name
+              }],
+              lastUpdated: Date.now()
+            };
+          })
+        };
+      }));
+    };
+
     if (oldIndex === -1) {
       console.log('⚠️ Current status not found in columns, allowing move');
+      optimisticUpdate(draggedItem.orderId, draggedItem.id, statusId);
       updateOrderItemStatus(draggedItem.orderId, draggedItem.id, statusId, CURRENT_USER.name);
       addVisualLog('Cập nhật tiến độ', draggedItem.name, `Chuyển sang [${newStatusTitle}]`, 'info');
     } else if (newIndex < oldIndex) {
@@ -1491,6 +1516,7 @@ export const KanbanBoard: React.FC = () => {
       });
     } else {
       console.log('➡️ Forward move, calling updateOrderItemStatus');
+      optimisticUpdate(draggedItem.orderId, draggedItem.id, statusId);
       updateOrderItemStatus(draggedItem.orderId, draggedItem.id, statusId, CURRENT_USER.name);
       addVisualLog('Cập nhật tiến độ', draggedItem.name, `Chuyển từ [${oldStatusTitle}] sang [${newStatusTitle}]`, 'info');
     }
@@ -1564,12 +1590,44 @@ export const KanbanBoard: React.FC = () => {
         }
       } else {
         // Just mark as cancelled
+        // Optimistic update for cancel
+        setOrders(prevOrders => prevOrders.map(order => {
+          if (order.id !== modalConfig.item?.orderId) return order;
+          return {
+            ...order,
+            items: order.items.map(item => {
+              if (item.id !== modalConfig.item?.id) return item;
+              return {
+                ...item,
+                status: 'cancel',
+                lastUpdated: Date.now()
+              };
+            })
+          };
+        }));
+
         updateOrderItemStatus(modalConfig.item.orderId, modalConfig.item.id, 'cancel', CURRENT_USER.name, reasonInput);
         addVisualLog('Hủy', modalConfig.item.name, `Từ [${oldStatusTitle}]. Lý do: ${reasonInput}`, 'danger');
       }
     }
     else if (modalConfig.type === 'BACKWARD' && modalConfig.targetStatus) {
       const newStatusTitle = columns.find(c => c.id === modalConfig.targetStatus)?.title;
+      // Optimistic update for backward move
+      setOrders(prevOrders => prevOrders.map(order => {
+        if (order.id !== modalConfig.item?.orderId) return order;
+        return {
+          ...order,
+          items: order.items.map(item => {
+            if (item.id !== modalConfig.item?.id) return item;
+            return {
+              ...item,
+              status: modalConfig.targetStatus!,
+              lastUpdated: Date.now()
+            };
+          })
+        };
+      }));
+
       updateOrderItemStatus(modalConfig.item.orderId, modalConfig.item.id, modalConfig.targetStatus, CURRENT_USER.name, reasonInput);
       addVisualLog('Trả lại quy trình', modalConfig.item.name, `Từ [${oldStatusTitle}] về [${newStatusTitle}]. Ghi chú: ${reasonInput}`, 'warning');
     }
@@ -2250,7 +2308,9 @@ export const KanbanBoard: React.FC = () => {
         <div className="flex-1 overflow-hidden bg-neutral-900/50 rounded-xl border border-neutral-800 relative">
           {activeWorkflow === 'ALL' ? (
             // MATRIX VIEW
-            // MATRIX VIEW
+            // ⚠️ CRITICAL: DO NOT MODIFY THIS UI LAYOUT
+            // USER REQUIREMENT: "trong bản kanban khi chỉnh sửa không bao giờ được sửa giao diện phần tất cả công việc này"
+            // PRESERVE THE CURRENT MATRIX VIEW LAYOUT AS IS.
             <div className="absolute inset-0 overflow-auto bg-neutral-900/50">
               <div className="min-w-full w-max pb-10">
                 {/* Header Row - Restored for Right Column Alignment */}
