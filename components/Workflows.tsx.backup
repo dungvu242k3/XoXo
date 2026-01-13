@@ -1,0 +1,2136 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, GitMerge, MoreHorizontal, Settings, Layers, Building2, Package, X, Eye, Edit, Trash2, GripVertical, ArrowUp, ArrowDown, Columns, Users, CheckCircle2, Circle } from 'lucide-react';
+import { MOCK_WORKFLOWS, MOCK_MEMBERS } from '../constants';
+import { ServiceType, WorkflowDefinition, InventoryItem, WorkflowStage, WorkflowMaterial, Member, TodoStep } from '../types';
+import { supabase, DB_TABLES } from '../supabase';
+import { useAppStore } from '../context';
+
+// Action Menu Component
+const ActionMenu: React.FC<{
+   onView: () => void;
+   onEdit: () => void;
+   onDelete: () => void;
+   itemName: string;
+}> = ({ onView, onEdit, onDelete, itemName }) => {
+   const [isOpen, setIsOpen] = useState(false);
+   const menuRef = useRef<HTMLDivElement>(null);
+
+   useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+         if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+            setIsOpen(false);
+         }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+   }, []);
+
+   return (
+      <div className="relative" ref={menuRef}>
+         <button
+            onClick={(e) => {
+               e.stopPropagation();
+               setIsOpen(!isOpen);
+            }}
+            className="p-2 hover:bg-neutral-800 rounded-lg text-slate-500 hover:text-slate-300 transition-colors"
+         >
+            <MoreHorizontal size={20} />
+         </button>
+
+         {isOpen && (
+            <div className="absolute right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 min-w-[140px] overflow-hidden">
+               <button
+                  onClick={(e) => {
+                     e.stopPropagation();
+                     onView();
+                     setIsOpen(false);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-neutral-700 flex items-center gap-2 transition-colors"
+               >
+                  <Eye size={16} />
+                  Xem
+               </button>
+               <button
+                  onClick={(e) => {
+                     e.stopPropagation();
+                     onEdit();
+                     setIsOpen(false);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-300 hover:bg-neutral-700 flex items-center gap-2 transition-colors"
+               >
+                  <Edit size={16} />
+                  Sửa
+               </button>
+               <button
+                  onClick={(e) => {
+                     e.stopPropagation();
+                     if (window.confirm(`Bạn có chắc chắn muốn xóa "${itemName}"?`)) {
+                        onDelete();
+                     }
+                     setIsOpen(false);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition-colors"
+               >
+                  <Trash2 size={16} />
+                  Xóa
+               </button>
+            </div>
+         )}
+      </div>
+   );
+};
+
+// Helper to get department from member role
+const getDepartmentFromRole = (role: Member['role']): string => {
+   switch (role) {
+      case 'Quản lý': return 'Quản Lý';
+      case 'Kỹ thuật viên': return 'Kỹ Thuật';
+      case 'QC': return 'QA/QC';
+      case 'Tư vấn viên': return 'Kinh Doanh';
+      default: return 'Khác';
+   }
+};
+
+// Helper to get unique departments from members
+const getDepartmentsFromMembers = (): string[] => {
+   const departments = new Set<string>();
+   // Safely check if MOCK_MEMBERS exists and is an array
+   if (MOCK_MEMBERS && Array.isArray(MOCK_MEMBERS)) {
+      MOCK_MEMBERS.forEach(member => {
+         const dept = member.department || getDepartmentFromRole(member.role);
+         if (dept && dept !== 'Khác') {
+            departments.add(dept);
+         }
+      });
+   }
+   // Add default departments if not found in members
+   const defaultDepts = ['Kỹ Thuật', 'Spa', 'QA/QC', 'Hậu Cần', 'Quản Lý', 'Kinh Doanh'];
+   defaultDepts.forEach(dept => departments.add(dept));
+   return Array.from(departments).sort();
+};
+
+export const Workflows: React.FC = () => {
+   const { inventory = [] } = useAppStore();
+   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition | null>(null);
+   const [showAddModal, setShowAddModal] = useState(false);
+   const [showViewModal, setShowViewModal] = useState(false);
+   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
+
+   // Load workflows từ Supabase với join bảng các bước (di chuyển ra ngoài để có thể gọi từ các hàm khác)
+   const loadWorkflows = async () => {
+      try {
+         // Load workflows
+         const { data: workflowsData, error: workflowsError } = await supabase
+            .from(DB_TABLES.WORKFLOWS)
+            .select('id, ten_quy_trinh, mo_ta, phong_ban_phu_trach, loai_ap_dung, vat_tu_can_thiet, nhan_vien_duoc_giao')
+            .order('ngay_tao', { ascending: false })
+            .limit(100);
+
+         if (workflowsError) throw workflowsError;
+
+         // Load tất cả các bước quy trình (không load cong_viec nữa)
+         const { data: stagesData, error: stagesError } = await supabase
+            .from(DB_TABLES.WORKFLOW_STAGES)
+            .select('id, id_quy_trinh, ten_buoc, thu_tu, chi_tiet, tieu_chuan, nhan_vien_duoc_giao')
+            .order('id_quy_trinh, thu_tu', { ascending: true });
+
+         if (stagesError) throw stagesError;
+
+         // Load tasks từ bảng riêng
+         const stageIds = (stagesData || []).map((s: any) => s.id);
+         let tasksData: any[] = [];
+
+         if (stageIds.length > 0) {
+            const { data: tasks, error: tasksError } = await supabase
+               .from(DB_TABLES.WORKFLOW_TASKS)
+               .select('*')
+               .in('id_buoc_quy_trinh', stageIds)
+               .order('thu_tu', { ascending: true });
+
+            if (!tasksError && tasks) {
+               tasksData = tasks;
+            }
+         }
+
+         // Group tasks by stage id
+         const tasksByStage: Record<string, any[]> = tasksData.reduce((acc: Record<string, any[]>, task: any) => {
+            if (!acc[task.id_buoc_quy_trinh]) {
+               acc[task.id_buoc_quy_trinh] = [];
+            }
+            acc[task.id_buoc_quy_trinh].push({
+               id: task.id,
+               title: task.ten_task,
+               description: task.mo_ta || undefined,
+               completed: task.da_hoan_thanh || false,
+               order: task.thu_tu || 0
+            });
+            return acc;
+         }, {} as Record<string, any[]>);
+
+         // Group stages by workflow ID
+         const stagesByWorkflow = new Map<string, WorkflowStage[]>();
+         (stagesData || []).forEach((stage: any) => {
+            if (!stagesByWorkflow.has(stage.id_quy_trinh)) {
+               stagesByWorkflow.set(stage.id_quy_trinh, []);
+            }
+            stagesByWorkflow.get(stage.id_quy_trinh)!.push({
+               id: stage.id,
+               name: stage.ten_buoc,
+               order: stage.thu_tu,
+               details: stage.chi_tiet || undefined,
+               standards: stage.tieu_chuan || undefined,
+               todos: tasksByStage[stage.id] || undefined,
+               assignedMembers: stage.nhan_vien_duoc_giao || undefined
+            });
+         });
+
+         // Map từ tên cột tiếng Việt sang interface
+         const departmentMap: Record<string, WorkflowDefinition['department']> = {
+            'ky_thuat': 'Kỹ Thuật',
+            'spa': 'Spa',
+            'qc': 'QA/QC',
+            'hau_can': 'Hậu Cần'
+         };
+
+         const workflowsList: WorkflowDefinition[] = (workflowsData || []).map((wf: any) => ({
+            id: wf.id,
+            label: wf.ten_quy_trinh || '',
+            description: wf.mo_ta || '',
+            department: departmentMap[wf.phong_ban_phu_trach] || 'Kỹ Thuật',
+            types: wf.loai_ap_dung || [],
+            materials: wf.vat_tu_can_thiet || undefined,
+            stages: stagesByWorkflow.get(wf.id) || undefined,
+            assignedMembers: wf.nhan_vien_duoc_giao || undefined,
+            color: 'bg-slate-500' // Default color
+         }));
+
+         setWorkflows(workflowsList);
+      } catch (error) {
+         console.error('Error loading workflows:', error);
+         setWorkflows([]);
+      } finally {
+         setIsLoading(false);
+      }
+   };
+
+   useEffect(() => {
+      loadWorkflows();
+
+      // Listen for real-time updates (with error handling)
+      let channel: any = null;
+      try {
+         // Debounce để tránh reload quá nhiều
+         let reloadTimeout: NodeJS.Timeout;
+         const debouncedReload = () => {
+            clearTimeout(reloadTimeout);
+            reloadTimeout = setTimeout(() => {
+               console.log('Workflow changed, reloading...');
+               loadWorkflows();
+            }, 300); // Debounce 300ms để nhanh hơn
+         };
+
+         channel = supabase
+            .channel('workflows-changes')
+            .on('postgres_changes',
+               { event: '*', schema: 'public', table: DB_TABLES.WORKFLOWS },
+               debouncedReload
+            )
+            .on('postgres_changes',
+               { event: '*', schema: 'public', table: DB_TABLES.WORKFLOW_STAGES },
+               debouncedReload
+            )
+            .subscribe((status) => {
+               if (status === 'SUBSCRIBED') {
+                  console.log('✅ Subscribed to workflows and stages changes');
+               } else if (status === 'CHANNEL_ERROR') {
+                  console.warn('⚠️ Channel error, will retry on next load');
+               }
+            });
+      } catch (error) {
+         console.warn('Could not setup real-time subscription:', error);
+         // Continue without real-time updates
+      }
+
+      return () => {
+         if (channel) {
+            supabase.removeChannel(channel).catch(console.error);
+         }
+      };
+   }, []);
+
+   const handleOpenConfig = (wf: WorkflowDefinition) => {
+      // Navigate to config page instead of opening modal
+      window.location.href = `#/workflows/${wf.id}/config`;
+   };
+
+   // Ensure workflows is always an array (computed after state updates)
+   const safeWorkflows = Array.isArray(workflows) ? workflows : [];
+
+   return (
+      <div className="space-y-6">
+         {/* Modal Tạo Quy Trình Mới */}
+         {showAddModal && (
+            <CreateWorkflowModal
+               onClose={() => setShowAddModal(false)}
+               onSuccess={loadWorkflows}
+            />
+         )}
+
+         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+               <h1 className="text-2xl font-serif font-bold text-slate-100">Quản Lý Quy Trình</h1>
+               <p className="text-slate-500 mt-1">Thiết lập các luồng xử lý và định mức nguyên vật liệu.</p>
+            </div>
+            <button
+               onClick={() => setShowAddModal(true)}
+               className="flex items-center gap-2 bg-gold-600 hover:bg-gold-700 text-black font-medium px-4 py-2.5 rounded-lg shadow-lg shadow-gold-900/20 transition-all"
+            >
+               <Plus size={18} />
+               <span>Tạo Quy Trình Mới</span>
+            </button>
+         </div>
+
+         {/* Workflows Grid - Card Layout */}
+         {isLoading ? (
+            <div className="text-center py-12 text-slate-500">
+               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold-500 mx-auto mb-4"></div>
+               <p>Đang tải quy trình...</p>
+            </div>
+         ) : safeWorkflows.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+               <Layers size={48} className="mx-auto mb-4 text-slate-600" />
+               <p className="text-lg font-medium mb-2">Chưa có quy trình nào</p>
+               <p className="text-sm mb-4">Tạo quy trình mới để bắt đầu</p>
+               <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-2 bg-gold-600 hover:bg-gold-700 text-black font-medium px-4 py-2.5 rounded-lg shadow-lg shadow-gold-900/20 transition-all mx-auto"
+               >
+                  <Plus size={18} />
+                  <span>Tạo Quy Trình Mới</span>
+               </button>
+            </div>
+         ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+               {safeWorkflows.map((wf) => (
+               <div
+                  key={wf.id}
+                  className="bg-neutral-900 rounded-xl shadow-lg shadow-black/20 border border-neutral-800 overflow-hidden hover:border-gold-500/50 transition-all group cursor-pointer"
+                  onClick={() => {
+                     setSelectedWorkflow(wf);
+                     setShowViewModal(true);
+                  }}
+               >
+                  {/* Card Header */}
+                  <div className="p-4 border-b border-neutral-800">
+                     <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                           <h3 className="font-bold text-slate-100 text-base mb-1 line-clamp-2 group-hover:text-gold-400 transition-colors">
+                              {wf.label}
+                           </h3>
+                           <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400 bg-neutral-800 px-2 py-0.5 rounded border border-neutral-700">
+                                 {wf.department}
+                              </span>
+                              {wf.assignedMembers && wf.assignedMembers.length > 0 && (
+                                 <span className="text-xs text-slate-500 flex items-center gap-1">
+                                    <Users size={12} />
+                                    {wf.assignedMembers.length}
+                                 </span>
+                              )}
+                           </div>
+                        </div>
+                        <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                           <ActionMenu
+                              itemName={wf.label}
+                              onView={() => {
+                                 setSelectedWorkflow(wf);
+                                 setShowViewModal(true);
+                              }}
+                              onEdit={() => {
+                                 handleOpenConfig(wf);
+                              }}
+                              onDelete={async () => {
+                                       if (window.confirm(`CẢNH BÁO: BẠN SẮP XÓA QUY TRÌNH "${wf.label}"\n\nHành động này sẽ:\n- Xóa vĩnh viễn quy trình này.\n- Gỡ bỏ quy trình khỏi tất cả Dịch vụ đang sử dụng.\n- HỦY (Cancel) tất cả các công việc đang chạy trên quy trình này.\n\nBạn có chắc chắn muốn tiếp tục?`)) {
+                                          try {
+                                             // 1. Fetch data necessary for cascade
+                                             const [servicesResult, ordersResult] = await Promise.all([
+                                                supabase.from(DB_TABLES.SERVICES).select('*'),
+                                                supabase.from(DB_TABLES.ORDERS).select('*')
+                                             ]);
+
+                                             // 2. Delete workflow
+                                             const { error: deleteError } = await supabase
+                                                .from(DB_TABLES.WORKFLOWS)
+                                                .delete()
+                                                .eq('id', wf.id);
+
+                                             if (deleteError) throw deleteError;
+
+                                             // 3. Clean Services (Remove workflow reference)
+                                             if (servicesResult.data) {
+                                                for (const svc of servicesResult.data) {
+                                                   const workflows = svc.cac_buoc_quy_trinh || [];
+                                                   const newWorkflows = workflows.filter((w: any) => w.id !== wf.id);
+                                                   if (newWorkflows.length !== workflows.length) {
+                                                      await supabase
+                                                         .from(DB_TABLES.SERVICES)
+                                                         .update({ cac_buoc_quy_trinh: newWorkflows })
+                                                         .eq('id', svc.id);
+                                                   }
+                                                }
+                                             }
+
+                                             // 4. Cancel Active Orders/Tasks using this Workflow
+                                             if (ordersResult.data) {
+                                                for (const order of ordersResult.data) {
+                                                   // Get items for this order
+                                                   const { data: items } = await supabase
+                                                      .from(DB_TABLES.SERVICE_ITEMS)
+                                                      .select('*')
+                                                      .eq('id_don_hang', order.id);
+
+                                                   if (items) {
+                                                      for (const item of items) {
+                                                         const isActive = item.trang_thai !== 'done' && item.trang_thai !== 'cancel';
+                                                         const usesWorkflow = item.id_quy_trinh === wf.id;
+
+                                                         if (isActive && usesWorkflow) {
+                                                            const history = item.lich_su_thuc_hien || [];
+                                                            const newHistory = [
+                                                               ...history,
+                                                               {
+                                                                  stageId: 'system',
+                                                                  stageName: 'Hủy Tự Động',
+                                                                  enteredAt: Date.now(),
+                                                                  performedBy: 'System'
+                                                               }
+                                                            ];
+
+                                                            await supabase
+                                                               .from(DB_TABLES.SERVICE_ITEMS)
+                                                               .update({
+                                                                  trang_thai: 'cancel',
+                                                                  lich_su_thuc_hien: newHistory
+                                                               })
+                                                               .eq('id', item.id);
+                                                         }
+                                                      }
+                                                   }
+                                                }
+                                             }
+                                             alert(`Đã xóa quy trình "${wf.label}" và cập nhật dữ liệu liên quan thành công!`);
+
+                                          } catch (error: any) {
+                                             console.error('Lỗi khi xóa quy trình:', error);
+                                             const errorMessage = error?.message || String(error);
+                                             alert('Lỗi khi xóa quy trình: ' + errorMessage);
+                                          }
+                                       }
+                                    }}
+                                 />
+                        </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-4 space-y-3">
+                     {/* Description */}
+                     {wf.description && (
+                        <p className="text-xs text-slate-400 line-clamp-2">{wf.description}</p>
+                     )}
+
+                     {/* Types */}
+                     <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] text-slate-500">Loại:</span>
+                        {wf.types.length > 0 ? (
+                           wf.types.map((type, idx) => (
+                              <span key={idx} className="text-[10px] px-2 py-0.5 bg-neutral-800 border border-neutral-700 rounded text-slate-400">
+                                 {type}
+                              </span>
+                           ))
+                        ) : (
+                           <span className="text-[10px] text-slate-500 italic">Tất cả</span>
+                        )}
+                     </div>
+
+                     {/* Stats */}
+                     <div className="flex items-center gap-4 pt-2 border-t border-neutral-800">
+                        {wf.materials && wf.materials.length > 0 && (
+                           <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <Package size={14} className="text-gold-500" />
+                              <span>{wf.materials.length} vật tư</span>
+                           </div>
+                        )}
+                        {wf.stages && wf.stages.length > 0 && (
+                           <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                              <Columns size={14} className="text-blue-500" />
+                              <span>{wf.stages.length} bước</span>
+                           </div>
+                        )}
+                     </div>
+
+                     {/* Stages Preview */}
+                     {wf.stages && wf.stages.length > 0 && (
+                        <div className="pt-2 border-t border-neutral-800">
+                           <div className="text-[10px] text-slate-500 mb-1.5">Các bước:</div>
+                           <div className="flex flex-wrap gap-1">
+                              {wf.stages.slice(0, 3).map((stage, idx) => (
+                                 <div
+                                    key={stage.id}
+                                    className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-[10px] text-slate-400 flex items-center gap-1"
+                                 >
+                                    <span className="text-gold-500 font-bold">#{idx + 1}</span>
+                                    <span className="truncate max-w-[80px]">{stage.name}</span>
+                                 </div>
+                              ))}
+                              {wf.stages.length > 3 && (
+                                 <div className="px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-[10px] text-slate-500">
+                                    +{wf.stages.length - 3} bước
+                                 </div>
+                              )}
+                           </div>
+                        </div>
+                     )}
+                  </div>
+               </div>
+               ))}
+            </div>
+         )}
+
+         {/* Configuration Modal - Đã chuyển sang trang riêng /workflows/:id/config */}
+
+         {/* View Modal */}
+         {showViewModal && selectedWorkflow && (
+            <WorkflowViewModal
+               workflow={selectedWorkflow}
+               onClose={() => {
+                  setShowViewModal(false);
+                  setSelectedWorkflow(null);
+               }}
+            />
+         )}
+      </div>
+   );
+};
+
+// --- Sub-component: Stage Item ---
+const StageItem: React.FC<{
+   stage: WorkflowStage;
+   idx: number;
+   stages: WorkflowStage[];
+   setStages: React.Dispatch<React.SetStateAction<WorkflowStage[]>>;
+}> = ({ stage, idx, stages, setStages }) => {
+   let members: Member[] = [];
+   try {
+      const appStore = useAppStore();
+      members = appStore?.members || [];
+   } catch (e) {
+      console.warn('useAppStore error in StageItem:', e);
+   }
+   const [showMemberSelector, setShowMemberSelector] = useState(false);
+   const [showTodoInput, setShowTodoInput] = useState(false);
+   const [newTodoText, setNewTodoText] = useState('');
+   const [newTodoNote, setNewTodoNote] = useState('');
+   const [editingTodo, setEditingTodo] = useState<{ id: string, title: string, description: string } | null>(null);
+
+   const stageTodos = stage.todos || [];
+
+   const handleAddTodo = () => {
+      if (!newTodoText.trim()) return;
+      const newTodo: TodoStep = {
+         id: `todo-${Date.now()}`,
+         title: newTodoText,
+         description: newTodoNote.trim(),
+         completed: false,
+         order: stageTodos.length
+      };
+      const updatedStages = stages.map(s =>
+         s.id === stage.id
+            ? { ...s, todos: [...(s.todos || []), newTodo] }
+            : s
+      );
+      setStages(updatedStages);
+      setNewTodoText('');
+      setNewTodoNote('');
+      setShowTodoInput(false);
+   };
+
+   const startEditing = (todo: TodoStep) => {
+      setEditingTodo({
+         id: todo.id,
+         title: todo.title,
+         description: todo.description || ''
+      });
+   };
+
+   const saveEditing = () => {
+      if (!editingTodo || !editingTodo.title.trim()) return;
+      const updatedStages = stages.map(s =>
+         s.id === stage.id
+            ? {
+               ...s, todos: (s.todos || []).map(t =>
+                  t.id === editingTodo.id ? { ...t, title: editingTodo.title, description: editingTodo.description } : t
+               )
+            }
+            : s
+      );
+      setStages(updatedStages);
+      setEditingTodo(null);
+   };
+
+   return (
+      <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
+         {/* Header Row - Table-like */}
+         <div className="grid grid-cols-12 gap-2 p-2 bg-neutral-800/50 items-center text-xs">
+            <div className="col-span-1 flex items-center gap-1">
+               <GripVertical size={14} className="text-slate-600 cursor-move" />
+            </div>
+            <div className="col-span-2 font-medium text-slate-200">
+               {idx + 1}. {stage.name}
+            </div>
+            <div className="col-span-3 text-slate-400">
+               {stage.details || <span className="italic text-slate-600">Chưa có chi tiết</span>}
+            </div>
+            <div className="col-span-3 text-slate-400">
+               {stage.standards || <span className="italic text-slate-600">Chưa có tiêu chuẩn</span>}
+            </div>
+            <div className="col-span-2 text-slate-500 text-center">
+               {stageTodos.length > 0 && (
+                  <span className="bg-neutral-700 px-2 py-0.5 rounded">
+                     {stageTodos.filter(t => t.completed).length}/{stageTodos.length} task
+                  </span>
+               )}
+               {stage.assignedMembers && stage.assignedMembers.length > 0 && (
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                     {stage.assignedMembers.slice(0, 2).map(memberId => {
+                        const member = members.find(m => m.id === memberId);
+                        if (!member) return null;
+                        return (
+                           <div key={memberId} className="flex items-center" title={member.name}>
+                              {member.avatar ? (
+                                 <img src={member.avatar} alt="" className="w-4 h-4 rounded-full border border-neutral-700" />
+                              ) : (
+                                 <div className="w-4 h-4 rounded-full bg-neutral-700 flex items-center justify-center text-[8px] font-bold text-slate-300">
+                                    {member.name.charAt(0).toUpperCase()}
+                                 </div>
+                              )}
+                           </div>
+                        );
+                     })}
+                     {stage.assignedMembers.length > 2 && (
+                        <span className="text-[9px] text-slate-500">+{stage.assignedMembers.length - 2}</span>
+                     )}
+                  </div>
+               )}
+            </div>
+            <div className="col-span-1 flex items-center justify-end gap-1">
+               {idx > 0 && (
+                  <button
+                     onClick={() => {
+                        const newStages = [...stages];
+                        [newStages[idx], newStages[idx - 1]] = [newStages[idx - 1], newStages[idx]];
+                        newStages[idx].order = idx;
+                        newStages[idx - 1].order = idx - 1;
+                        setStages(newStages);
+                     }}
+                     className="p-1 hover:bg-neutral-700 rounded text-slate-500 hover:text-slate-300"
+                     title="Di chuyển lên"
+                  >
+                     <ArrowUp size={12} />
+                  </button>
+               )}
+               {idx < stages.length - 1 && (
+                  <button
+                     onClick={() => {
+                        const newStages = [...stages];
+                        [newStages[idx], newStages[idx + 1]] = [newStages[idx + 1], newStages[idx]];
+                        newStages[idx].order = idx;
+                        newStages[idx + 1].order = idx + 1;
+                        setStages(newStages);
+                     }}
+                     className="p-1 hover:bg-neutral-700 rounded text-slate-500 hover:text-slate-300"
+                     title="Di chuyển xuống"
+                  >
+                     <ArrowDown size={12} />
+                  </button>
+               )}
+               <button
+                  onClick={() => {
+                     if (window.confirm(`Xóa bước "${stage.name}"?`)) {
+                        setStages(stages.filter(s => s.id !== stage.id).map((s, i) => ({ ...s, order: i })));
+                     }
+                  }}
+                  className="p-1 hover:bg-neutral-700 rounded text-slate-500 hover:text-red-500"
+               >
+                  <X size={12} />
+               </button>
+            </div>
+         </div>
+
+         {/* Add Task Button - Moved to top */}
+         <div className="px-2 pt-2 pb-1 border-b border-neutral-800 flex items-center justify-between gap-2">
+            <button
+               onClick={() => setShowTodoInput(!showTodoInput)}
+               className="text-[10px] px-2 py-1 bg-gold-600/20 hover:bg-gold-600/30 text-gold-400 rounded flex items-center gap-1 transition-colors border border-gold-800/30"
+            >
+               <Plus size={10} />
+               Thêm Task
+            </button>
+            <div className="relative">
+               <button
+                  onClick={() => setShowMemberSelector(!showMemberSelector)}
+                  className="text-[10px] px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded flex items-center gap-1 transition-colors border border-blue-800/30"
+                  title="Gán nhân sự"
+               >
+                  <Users size={10} />
+                  {stage.assignedMembers && stage.assignedMembers.length > 0 ? stage.assignedMembers.length : 'Gán'}
+               </button>
+               {showMemberSelector && (
+                  <div className="absolute right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                     <div className="p-2 border-b border-neutral-700">
+                        <div className="text-xs font-medium text-slate-300">Chọn nhân sự</div>
+                     </div>
+                     <div className="p-2 space-y-1">
+                        {members.map(member => {
+                           const isSelected = stage.assignedMembers?.includes(member.id) || false;
+                           return (
+                              <label
+                                 key={member.id}
+                                 className="flex items-center gap-2 px-2 py-1.5 hover:bg-neutral-700 rounded cursor-pointer"
+                              >
+                                 <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                       const currentMembers = stage.assignedMembers || [];
+                                       const newMembers = e.target.checked
+                                          ? [...currentMembers, member.id]
+                                          : currentMembers.filter(id => id !== member.id);
+                                       const updatedStages = stages.map(s =>
+                                          s.id === stage.id ? { ...s, assignedMembers: newMembers } : s
+                                       );
+                                       setStages(updatedStages);
+                                    }}
+                                    className="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500"
+                                 />
+                                 <div className="flex items-center gap-2 flex-1">
+                                    {member.avatar ? (
+                                       <img src={member.avatar} alt="" className="w-5 h-5 rounded-full" />
+                                    ) : (
+                                       <div className="w-5 h-5 rounded-full bg-neutral-700 flex items-center justify-center text-[10px] font-bold text-slate-300">
+                                          {member.name.charAt(0).toUpperCase()}
+                                       </div>
+                                    )}
+                                    <span className="text-xs text-slate-300">{member.name}</span>
+                                 </div>
+                              </label>
+                           );
+                        })}
+                     </div>
+                  </div>
+               )}
+            </div>
+         </div>
+
+         {/* Tasks Section */}
+         <div className="p-2 pt-0">
+            <div className="flex items-center justify-between mb-1 mt-2">
+               <p className="text-[10px] font-medium text-slate-500 uppercase">Các task con</p>
+            </div>
+
+            {showTodoInput && (
+               <div className="flex flex-col gap-2 mb-2 p-2 bg-neutral-800 rounded border border-neutral-700 animate-in fade-in zoom-in-95 duration-100">
+                  <input
+                     type="text"
+                     value={newTodoText}
+                     onChange={(e) => setNewTodoText(e.target.value)}
+                     onKeyPress={(e) => {
+                        if (e.key === 'Enter' && newTodoText.trim()) {
+                           // Focus note
+                           const noteInput = document.getElementById(`new-note-${stage.id}`);
+                           if (noteInput) noteInput.focus();
+                        }
+                     }}
+                     placeholder="Tên task..."
+                     className="w-full px-2 py-1 text-[11px] border border-neutral-600 rounded bg-neutral-900 text-slate-200 outline-none focus:border-gold-500"
+                     autoFocus
+                  />
+                  <div className="flex gap-2">
+                     <input
+                        id={`new-note-${stage.id}`}
+                        type="text"
+                        value={newTodoNote}
+                        onChange={(e) => setNewTodoNote(e.target.value)}
+                        onKeyPress={(e) => {
+                           if (e.key === 'Enter') handleAddTodo();
+                        }}
+                        placeholder="Ghi chú (tùy chọn)..."
+                        className="flex-1 px-2 py-1 text-[11px] border border-neutral-600 rounded bg-neutral-900 text-slate-200 outline-none focus:border-gold-500"
+                     />
+                     <button
+                        onClick={handleAddTodo}
+                        className="px-2 py-1 bg-gold-600 hover:bg-gold-700 text-black rounded text-[11px] font-medium transition-colors"
+                     >
+                        OK
+                     </button>
+                  </div>
+               </div>
+            )}
+
+            {stageTodos.length === 0 ? (
+               <p className="text-[10px] text-slate-600 italic py-1">Chưa có task</p>
+            ) : (
+               <div className="space-y-1">
+                  {stageTodos.map(todo => (
+                     <div key={todo.id} className="bg-neutral-800/30 rounded border border-neutral-800 p-1.5">
+                        <div className="flex items-start gap-1.5 text-[11px]">
+                           <button
+                              onClick={() => {
+                                 const updatedStages = stages.map(s =>
+                                    s.id === stage.id
+                                       ? {
+                                          ...s, todos: (s.todos || []).map(t =>
+                                             t.id === todo.id ? { ...t, completed: !t.completed } : t
+                                          )
+                                       }
+                                       : s
+                                 );
+                                 setStages(updatedStages);
+                              }}
+                              className="flex-shrink-0 mt-0.5"
+                           >
+                              {todo.completed ? (
+                                 <CheckCircle2 size={12} className="text-emerald-500" />
+                              ) : (
+                                 <Circle size={12} className="text-slate-600" />
+                              )}
+                           </button>
+
+                           {/* Edit Form or Display */}
+                           {editingTodo && editingTodo.id === todo.id ? (
+                              <div className="flex-1 space-y-1">
+                                 <input
+                                    value={editingTodo.title}
+                                    onChange={(e) => setEditingTodo({ ...editingTodo, title: e.target.value })}
+                                    className="w-full px-1.5 py-0.5 text-[11px] border border-neutral-600 rounded bg-neutral-900 text-slate-200 focus:border-gold-500 outline-none"
+                                    autoFocus
+                                 />
+                                 <div className="flex gap-1">
+                                    <input
+                                       value={editingTodo.description}
+                                       onChange={(e) => setEditingTodo({ ...editingTodo, description: e.target.value })}
+                                       className="flex-1 px-1.5 py-0.5 text-[10px] border border-neutral-600 rounded bg-neutral-900 text-slate-300 focus:border-gold-500 outline-none"
+                                       placeholder="Ghi chú..."
+                                       onKeyDown={e => { if (e.key === 'Enter') saveEditing() }}
+                                    />
+                                    <button onClick={saveEditing} className="px-1.5 bg-gold-600 text-[10px] text-black rounded">Lưu</button>
+                                    <button onClick={() => setEditingTodo(null)} className="px-1.5 bg-neutral-700 text-[10px] text-slate-300 rounded">Hủy</button>
+                                 </div>
+                              </div>
+                           ) : (
+                              <div className="flex-1 group" onClick={() => startEditing(todo)} title="Nhấn để sửa">
+                                 <div className="flex justify-between items-start">
+                                    <span className={`${todo.completed ? 'text-slate-500 line-through' : 'text-slate-300'} hover:text-gold-400 cursor-pointer`}>
+                                       {todo.title}
+                                    </span>
+                                    <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                                       <button
+                                          onClick={(e) => { e.stopPropagation(); startEditing(todo); }}
+                                          className="text-slate-600 hover:text-blue-400 transition-colors"
+                                       >
+                                          <Edit size={10} />
+                                       </button>
+                                       <button
+                                          onClick={(e) => {
+                                             e.stopPropagation();
+                                             const updatedStages = stages.map(s =>
+                                                s.id === stage.id
+                                                   ? { ...s, todos: (s.todos || []).filter(t => t.id !== todo.id).map((t, i) => ({ ...t, order: i })) }
+                                                   : s
+                                             );
+                                             setStages(updatedStages);
+                                          }}
+                                          className="text-slate-600 hover:text-red-500 transition-colors"
+                                       >
+                                          <X size={10} />
+                                       </button>
+                                    </div>
+                                 </div>
+                                 {todo.description && (
+                                    <div className="text-[10px] text-slate-500 mt-0.5">{todo.description}</div>
+                                 )}
+                              </div>
+                           )}
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            )}
+         </div>
+      </div>
+   );
+};
+
+// --- Sub-component: Create Workflow Modal ---
+const CreateWorkflowModal: React.FC<{ onClose: () => void; onSuccess?: () => Promise<void> }> = ({ onClose, onSuccess }) => {
+   let inventory: InventoryItem[] = [];
+   try {
+      const appStore = useAppStore();
+      inventory = appStore?.inventory || [];
+   } catch (e) {
+      console.warn('useAppStore error in CreateWorkflowModal:', e);
+   }
+   const [workflowLabel, setWorkflowLabel] = useState('');
+   const [workflowDescription, setWorkflowDescription] = useState('');
+   const [workflowDepartment, setWorkflowDepartment] = useState<WorkflowDefinition['department']>('Kỹ Thuật');
+   const [materials, setMaterials] = useState<WorkflowMaterial[]>([]);
+   const [stages, setStages] = useState<WorkflowStage[]>([]);
+   const [selectedInventoryId, setSelectedInventoryId] = useState('');
+   const [quantity, setQuantity] = useState('');
+   const [newStageName, setNewStageName] = useState('');
+   const [newStageDetails, setNewStageDetails] = useState('');
+   const [newStageStandards, setNewStageStandards] = useState('');
+   const [assignedMembers, setAssignedMembers] = useState<string[]>([]);
+   const [memberSearchText, setMemberSearchText] = useState('');
+   
+   // State for Add Task form
+   const [showAddTaskForm, setShowAddTaskForm] = useState(false);
+   const [selectedStageForTask, setSelectedStageForTask] = useState<string>('');
+   const [newTaskTitle, setNewTaskTitle] = useState('');
+   const [newTaskDescription, setNewTaskDescription] = useState('');
+
+   // Tự động tạo ID từ tên quy trình
+   // ID sẽ được database tự tạo, không cần generate nữa
+
+   const getInventoryItem = (id: string) => (inventory || []).find(i => i.id === id);
+
+   const handleAddMaterial = () => {
+      if (!selectedInventoryId || !quantity) return;
+      const newItem = {
+         inventoryItemId: selectedInventoryId,
+         quantity: parseFloat(quantity)
+      };
+      setMaterials([...materials, newItem]);
+      setSelectedInventoryId('');
+      setQuantity('');
+   };
+
+   const handleRemoveMaterial = (index: number) => {
+      const newMaterials = [...materials];
+      newMaterials.splice(index, 1);
+      setMaterials(newMaterials);
+   };
+
+   const handleAddTaskToStage = () => {
+      if (!selectedStageForTask || !newTaskTitle.trim()) {
+         alert('Vui lòng chọn bước và nhập tên task!');
+         return;
+      }
+
+      const newTask: TodoStep = {
+         id: `todo-${Date.now()}`,
+         title: newTaskTitle.trim(),
+         description: newTaskDescription.trim(),
+         completed: false,
+         order: 0
+      };
+
+      const updatedStages = stages.map(s => {
+         if (s.id === selectedStageForTask) {
+            const existingTodos = s.todos || [];
+            newTask.order = existingTodos.length;
+            return {
+               ...s,
+               todos: [...existingTodos, newTask]
+            };
+         }
+         return s;
+      });
+
+      setStages(updatedStages);
+      setShowAddTaskForm(false);
+      setSelectedStageForTask('');
+      setNewTaskTitle('');
+      setNewTaskDescription('');
+   };
+
+   const handleSave = async () => {
+      console.log('handleSave called');
+      if (!workflowLabel) {
+         alert('Vui lòng nhập tên quy trình!');
+         return;
+      }
+
+      try {
+         console.log('Creating workflow object...');
+         // Map department name to enum value
+         const departmentMap: Record<string, string> = {
+            'Kỹ Thuật': 'ky_thuat',
+            'Spa': 'spa',
+            'QA/QC': 'qc',
+            'Hậu Cần': 'hau_can'
+         };
+
+         // Tạo đối tượng quy trình (KHÔNG gửi id - để database tự tạo)
+         const newWorkflow: any = {
+            ten_quy_trinh: workflowLabel,
+            phong_ban_phu_trach: departmentMap[workflowDepartment] || 'ky_thuat',
+            loai_ap_dung: [] // JSONB array - required field
+         };
+
+         // Chỉ thêm optional fields nếu có giá trị
+         if (workflowDescription) newWorkflow.mo_ta = workflowDescription;
+         if (materials.length > 0) newWorkflow.vat_tu_can_thiet = materials;
+         // KHÔNG thêm stages vào đây - sẽ lưu vào bảng riêng sau
+         if (assignedMembers.length > 0) newWorkflow.nhan_vien_duoc_giao = assignedMembers;
+
+         console.log('Saving workflow to Supabase:', newWorkflow);
+
+         // Lưu vào Supabase (không gửi id - database tự tạo)
+         // Chỉ select id để tối ưu tốc độ
+         const { data, error } = await supabase
+            .from(DB_TABLES.WORKFLOWS)
+            .insert(newWorkflow)
+            .select('id')
+            .single();
+
+         if (error) {
+            console.error('Supabase insert error:', error);
+            throw error;
+         }
+
+         const workflowId = data?.id;
+         if (!workflowId) throw new Error('Không thể lấy ID quy trình sau khi tạo');
+
+         // Lưu các bước vào bảng riêng
+         if (stages.length > 0) {
+            const stagesToInsert = stages.map((stage, index) => ({
+               id_quy_trinh: workflowId,
+               ten_buoc: stage.name,
+               thu_tu: stage.order !== undefined ? stage.order : index,
+               chi_tiet: stage.details || null,
+               tieu_chuan: stage.standards || null,
+               nhan_vien_duoc_giao: stage.assignedMembers && stage.assignedMembers.length > 0 ? stage.assignedMembers : null
+               // KHÔNG thêm cong_viec - tasks được lưu trong bảng riêng cac_task_quy_trinh
+            }));
+
+            console.log('Inserting stages:', stagesToInsert);
+            console.log('Table name:', DB_TABLES.WORKFLOW_STAGES);
+
+            const { data: insertedStages, error: stagesError } = await supabase
+               .from(DB_TABLES.WORKFLOW_STAGES)
+               .insert(stagesToInsert)
+               .select();
+
+            if (stagesError) {
+               console.error('Error inserting stages:', stagesError);
+               console.error('Error details:', {
+                  message: stagesError.message,
+                  details: stagesError.details,
+                  hint: stagesError.hint,
+                  code: stagesError.code
+               });
+               throw stagesError;
+            }
+
+            console.log('Stages inserted successfully:', insertedStages);
+         }
+
+         // Reset form
+         setWorkflowLabel('');
+         setWorkflowDescription('');
+         setWorkflowDepartment('Kỹ Thuật');
+         setMaterials([]);
+         setStages([]);
+         setAssignedMembers([]);
+         setMemberSearchText('');
+
+         // Reload workflows ngay để hiển thị luôn
+         if (onSuccess) {
+            await onSuccess();
+         }
+
+         alert(`Tạo quy trình thành công!\n\nID: ${workflowId}\nTên: ${workflowLabel}\nPhòng ban: ${workflowDepartment}\nVật tư: ${materials.length} loại\nCác bước: ${stages.length} bước\n\nĐã lưu vào Supabase!`);
+
+         onClose();
+      } catch (error: any) {
+         console.error('Lỗi khi lưu quy trình:', error);
+         const errorMessage = error?.message || String(error);
+         alert('Lỗi khi lưu quy trình vào Supabase:\n' + errorMessage + '\n\nVui lòng kiểm tra kết nối Supabase và thử lại.');
+      }
+   };
+
+   return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+         <div className="bg-neutral-900 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-neutral-800">
+            <div className="p-5 border-b border-neutral-800 flex justify-between items-center bg-neutral-900">
+               <div>
+                  <h3 className="font-bold text-lg text-slate-100">Tạo Quy Trình Mới</h3>
+                  <p className="text-xs text-slate-500">Thiết lập quy trình xử lý hoàn chỉnh</p>
+               </div>
+               <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-full transition-colors text-slate-400">
+                  <X size={20} />
+               </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+               <div className="grid grid-cols-2 gap-6">
+                  {/* Cột trái */}
+                  <div className="space-y-6">
+                     {/* 1. General Info */}
+                     <div>
+                        <h4 className="font-bold text-slate-200 mb-2 text-sm">Thông Tin Cơ Bản</h4>
+                        <div className="space-y-2">
+                           <div>
+                              <label className="text-xs font-medium text-slate-500 mb-1 block">Tên quy trình <span className="text-red-500">*</span></label>
+                              <input
+                                 type="text"
+                                 value={workflowLabel}
+                                 onChange={(e) => setWorkflowLabel(e.target.value)}
+                                 placeholder="VD: Spa cao cấp"
+                                 className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                              />
+                              <div className="mt-2 p-2 bg-neutral-800/50 rounded border border-neutral-700">
+                                 <span className="text-xs text-slate-400">ID sẽ được tự động tạo bởi database</span>
+                              </div>
+                           </div>
+
+                           <div>
+                              <label className="text-xs font-medium text-slate-500 mb-1 block">Mô tả</label>
+                              <textarea
+                                 value={workflowDescription}
+                                 onChange={(e) => setWorkflowDescription(e.target.value)}
+                                 placeholder="Mô tả quy trình xử lý..."
+                                 rows={2}
+                                 className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200 resize-none"
+                              />
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* 1.5. Nhân sự phụ trách */}
+                     <div>
+                        <h4 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                           <Users size={18} className="text-gold-500" />
+                           Nhân Sự Phụ Trách
+                        </h4>
+
+                        <div className="bg-neutral-800/30 p-4 rounded-lg border border-neutral-800">
+                           <div className="mb-3">
+                              <label className="text-xs font-medium text-slate-500 mb-2 block">Tìm kiếm nhân sự</label>
+                              <input
+                                 type="text"
+                                 value={memberSearchText}
+                                 onChange={(e) => setMemberSearchText(e.target.value)}
+                                 placeholder="Tìm theo tên, SĐT, email..."
+                                 className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                              />
+                           </div>
+
+                           <div className="max-h-48 overflow-y-auto">
+                              <div className="grid grid-cols-3 gap-2">
+                                 {MOCK_MEMBERS
+                                    .filter(m => {
+                                       const memberDept = m.department || getDepartmentFromRole(m.role);
+                                       const matchesDept = memberDept === workflowDepartment;
+                                       const matchesSearch = !memberSearchText.trim() ||
+                                          m.name.toLowerCase().includes(memberSearchText.toLowerCase()) ||
+                                          m.phone.includes(memberSearchText) ||
+                                          m.email.toLowerCase().includes(memberSearchText.toLowerCase());
+                                       return matchesDept && matchesSearch && m.status === 'Active';
+                                    })
+                                    .map(member => (
+                                       <label
+                                          key={member.id}
+                                          className="flex items-center gap-2 p-2 bg-neutral-900 rounded border border-neutral-800 hover:border-gold-500/50 cursor-pointer transition-colors"
+                                       >
+                                          <input
+                                             type="checkbox"
+                                             checked={assignedMembers.includes(member.id)}
+                                             onChange={(e) => {
+                                                if (e.target.checked) {
+                                                   setAssignedMembers([...assignedMembers, member.id]);
+                                                } else {
+                                                   setAssignedMembers(assignedMembers.filter(id => id !== member.id));
+                                                }
+                                             }}
+                                             className="w-4 h-4 text-gold-600 bg-neutral-800 border-neutral-700 rounded focus:ring-gold-500 flex-shrink-0"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                             <div className="text-xs font-medium text-slate-200 truncate">{member.name}</div>
+                                             <div className="text-[10px] text-slate-500 truncate">{member.role}</div>
+                                          </div>
+                                       </label>
+                                    ))}
+                              </div>
+                              {MOCK_MEMBERS.filter(m => {
+                                 const memberDept = m.department || getDepartmentFromRole(m.role);
+                                 return memberDept === workflowDepartment && m.status === 'Active';
+                              }).length === 0 && (
+                                    <div className="text-center py-4 text-slate-600 text-sm">
+                                       Không có nhân sự nào trong phòng ban này
+                                    </div>
+                                 )}
+                           </div>
+
+                           {assignedMembers.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-neutral-800">
+                                 <div className="text-xs font-medium text-slate-400 mb-2">Đã chọn ({assignedMembers.length}):</div>
+                                 <div className="flex flex-wrap gap-2">
+                                    {assignedMembers.map(memberId => {
+                                       const member = MOCK_MEMBERS.find(m => m.id === memberId);
+                                       if (!member) return null;
+                                       return (
+                                          <div
+                                             key={memberId}
+                                             className="flex items-center gap-2 px-2 py-1 bg-gold-900/20 text-gold-400 border border-gold-800/30 rounded text-xs"
+                                          >
+                                             {member.name}
+                                             <button
+                                                onClick={() => setAssignedMembers(assignedMembers.filter(id => id !== memberId))}
+                                                className="text-gold-500 hover:text-gold-300"
+                                             >
+                                                <X size={12} />
+                                             </button>
+                                          </div>
+                                       );
+                                    })}
+                                 </div>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* 1.6. Phòng ban */}
+                     <div>
+                        <h4 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                           <Building2 size={18} className="text-gold-500" />
+                           Phòng Ban Phụ Trách
+                        </h4>
+
+                        <div className="bg-neutral-800/30 p-4 rounded-lg border border-neutral-800">
+                           <div className="mb-3">
+                              <label className="text-xs font-medium text-slate-500 mb-2 block">Chọn hoặc thêm phòng ban</label>
+                              <div className="flex gap-2">
+                                 <select
+                                    value={workflowDepartment}
+                                    onChange={(e) => {
+                                       const dept = e.target.value as WorkflowDefinition['department'];
+                                       setWorkflowDepartment(dept);
+                                       // Lọc nhân sự theo phòng ban
+                                       const membersInDept = MOCK_MEMBERS.filter(m => {
+                                          const memberDept = m.department || getDepartmentFromRole(m.role);
+                                          return memberDept === dept;
+                                       });
+                                       // Cập nhật assignedMembers chỉ giữ lại những người thuộc phòng ban mới
+                                       setAssignedMembers(prev => prev.filter(id =>
+                                          membersInDept.some(m => m.id === id)
+                                       ));
+                                    }}
+                                    className="flex-1 p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                 >
+                                    {getDepartmentsFromMembers().map(dept => (
+                                       <option key={dept} value={dept}>{dept}</option>
+                                    ))}
+                                 </select>
+                                 <button
+                                    type="button"
+                                    onClick={() => {
+                                       const newDept = prompt('Nhập tên phòng ban mới:');
+                                       if (newDept && newDept.trim()) {
+                                          setWorkflowDepartment(newDept.trim());
+                                          // Clear assigned members khi tạo phòng ban mới
+                                          setAssignedMembers([]);
+                                       }
+                                    }}
+                                    className="px-3 py-2 bg-slate-100 hover:bg-white text-black rounded text-sm font-medium transition-colors flex items-center gap-1"
+                                    title="Thêm phòng ban mới"
+                                 >
+                                    <Plus size={14} /> Thêm
+                                 </button>
+                              </div>
+                           </div>
+
+                           <div className="text-xs text-slate-500 bg-neutral-900 p-2 rounded border border-neutral-700">
+                              <strong>Phòng ban hiện tại:</strong> {workflowDepartment}
+                              <div className="mt-1 text-[10px] text-slate-600">
+                                 Nhân sự sẽ được lọc theo phòng ban này
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* 3. Materials Configuration */}
+                     <div>
+                        <h4 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                           <Package size={18} className="text-gold-500" />
+                           Định Mức Nguyên Vật Liệu
+                        </h4>
+
+                        <div className="bg-neutral-800/30 p-4 rounded-lg border border-neutral-800 mb-4">
+                           <div className="grid grid-cols-1 gap-3 mb-3">
+                              <div>
+                                 <label className="text-xs font-medium text-slate-500 mb-1 block">Chọn vật tư trong kho</label>
+                                 <select
+                                    className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                    value={selectedInventoryId}
+                                    onChange={(e) => setSelectedInventoryId(e.target.value)}
+                                 >
+                                    <option value="">-- Chọn vật tư --</option>
+                                    {(inventory || []).map(item => (
+                                       <option key={item.id} value={item.id}>
+                                          {item.name} (Tồn: {item.quantity.toLocaleString('vi-VN')} {item.unit})
+                                       </option>
+                                    ))}
+                                 </select>
+                              </div>
+                              <div>
+                                 <label className="text-xs font-medium text-slate-500 mb-1 block">Định mức / SP</label>
+                                 <div className="flex">
+                                    <input
+                                       type="number"
+                                       step="0.01"
+                                       className="w-full p-2 border border-neutral-700 rounded-l text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                       placeholder="0.00"
+                                       value={quantity}
+                                       onChange={(e) => setQuantity(e.target.value)}
+                                    />
+                                    <span className="bg-neutral-800 px-3 py-2 text-xs flex items-center rounded-r border-y border-r border-neutral-700 text-slate-400">
+                                       {selectedInventoryId ? getInventoryItem(selectedInventoryId)?.unit : 'Đơn vị'}
+                                    </span>
+                                 </div>
+                              </div>
+                           </div>
+
+                           {selectedInventoryId && (
+                              <div className="flex items-center gap-3 mb-3 bg-neutral-900 p-2 rounded border border-neutral-800">
+                                 <img
+                                    src={getInventoryItem(selectedInventoryId)?.image}
+                                    alt=""
+                                    className="w-8 h-8 rounded object-cover opacity-80"
+                                 />
+                                 <div className="text-xs">
+                                    <span className="font-medium text-slate-200">{getInventoryItem(selectedInventoryId)?.name}</span>
+                                    <div className="text-slate-500">
+                                       Tồn kho hiện tại: <span className="font-bold text-emerald-500">{getInventoryItem(selectedInventoryId)?.quantity?.toLocaleString('vi-VN') || '0'}</span> {getInventoryItem(selectedInventoryId)?.unit}
+                                    </div>
+                                 </div>
+                              </div>
+                           )}
+
+                           <button
+                              onClick={handleAddMaterial}
+                              disabled={!selectedInventoryId || !quantity}
+                              className="w-full py-2 bg-slate-100 hover:bg-white disabled:bg-neutral-800 text-black rounded text-sm font-medium transition-colors"
+                           >
+                              + Thêm vào quy trình
+                           </button>
+                        </div>
+
+                        <div>
+                           {materials.length === 0 && (
+                              <div className="text-center py-4 text-slate-600 text-sm border border-dashed border-neutral-800 rounded-lg">
+                                 Chưa có định mức vật tư
+                              </div>
+                           )}
+                           <div className="grid grid-cols-3 gap-2">
+                              {materials.map((mat, idx) => {
+                                 const itemDetails = getInventoryItem(mat.inventoryItemId);
+                                 return (
+                                    <div key={idx} className="relative p-2 bg-neutral-900 border border-neutral-800 rounded-lg shadow-sm">
+                                       <div className="flex items-start gap-2 mb-2">
+                                          <div className="w-8 h-8 rounded bg-neutral-800 overflow-hidden flex-shrink-0">
+                                             <img src={itemDetails?.image} alt="" className="w-full h-full object-cover opacity-80" />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                             <h5 className="font-medium text-xs text-slate-200 truncate">{itemDetails?.name}</h5>
+                                             <p className="text-[10px] text-slate-500 truncate">{itemDetails?.sku}</p>
+                                          </div>
+                                       </div>
+                                       <div className="flex items-center justify-between">
+                                          <div className="text-xs">
+                                             <div className="font-bold text-slate-200">{mat.quantity.toLocaleString('vi-VN')} <span className="text-[10px] font-normal text-slate-500">{itemDetails?.unit}</span></div>
+                                             <div className="text-[10px] text-slate-500">định mức</div>
+                                          </div>
+                                          <button
+                                             onClick={() => handleRemoveMaterial(idx)}
+                                             className="text-slate-500 hover:text-red-500 p-1"
+                                          >
+                                             <X size={12} />
+                                          </button>
+                                       </div>
+                                    </div>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Cột phải */}
+                  <div className="space-y-6">
+                     {/* 2. Stages Configuration */}
+                     <div>
+                        <div className="flex items-center justify-between mb-2">
+                           <h4 className="font-bold text-slate-200 flex items-center gap-2 text-sm">
+                              <Columns size={16} className="text-gold-500" />
+                              Các Bước Xử Lý
+                           </h4>
+                           <button
+                              onClick={() => {
+                                 if (stages.length === 0) {
+                                    alert('Vui lòng thêm ít nhất một bước trước khi thêm task!');
+                                    return;
+                                 }
+                                 setShowAddTaskForm(true);
+                              }}
+                              className="text-xs px-3 py-1.5 bg-gold-600/20 hover:bg-gold-600/30 text-gold-400 rounded flex items-center gap-1 transition-colors border border-gold-800/30"
+                              title="Thêm task cho bước"
+                           >
+                              <Plus size={14} />
+                              Thêm Task
+                           </button>
+                        </div>
+
+                        {/* Add Task Form */}
+                        {showAddTaskForm && (
+                           <div className="bg-neutral-800/50 p-4 rounded-lg border border-gold-800/30 mb-3 animate-in fade-in zoom-in-95 duration-200">
+                              <div className="flex items-center justify-between mb-3">
+                                 <h5 className="text-sm font-medium text-slate-200">Thêm Task Mới</h5>
+                                 <button
+                                    onClick={() => {
+                                       setShowAddTaskForm(false);
+                                       setSelectedStageForTask('');
+                                       setNewTaskTitle('');
+                                       setNewTaskDescription('');
+                                    }}
+                                    className="text-slate-400 hover:text-slate-200"
+                                 >
+                                    <X size={16} />
+                                 </button>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                 <div>
+                                    <label className="text-xs font-medium text-slate-500 mb-1 block">
+                                       Chọn bước <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                       value={selectedStageForTask}
+                                       onChange={(e) => setSelectedStageForTask(e.target.value)}
+                                       className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                    >
+                                       <option value="">-- Chọn bước --</option>
+                                       {stages.sort((a, b) => a.order - b.order).map((stage) => (
+                                          <option key={stage.id} value={stage.id}>
+                                             {stage.order + 1}. {stage.name}
+                                          </option>
+                                       ))}
+                                    </select>
+                                 </div>
+
+                                 <div>
+                                    <label className="text-xs font-medium text-slate-500 mb-1 block">
+                                       Tên task <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                       type="text"
+                                       value={newTaskTitle}
+                                       onChange={(e) => setNewTaskTitle(e.target.value)}
+                                       placeholder="VD: Kiểm tra và chuẩn bị vật liệu"
+                                       className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                       onKeyPress={(e) => {
+                                          if (e.key === 'Enter' && newTaskTitle.trim() && selectedStageForTask) {
+                                             handleAddTaskToStage();
+                                          }
+                                       }}
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label className="text-xs font-medium text-slate-500 mb-1 block">
+                                       Mô tả (tùy chọn)
+                                    </label>
+                                    <input
+                                       type="text"
+                                       value={newTaskDescription}
+                                       onChange={(e) => setNewTaskDescription(e.target.value)}
+                                       placeholder="VD: Kiểm tra đầy đủ vật liệu cần thiết cho bước này"
+                                       className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                       onKeyPress={(e) => {
+                                          if (e.key === 'Enter' && newTaskTitle.trim() && selectedStageForTask) {
+                                             handleAddTaskToStage();
+                                          }
+                                       }}
+                                    />
+                                 </div>
+
+                                 <div className="flex gap-2 pt-2">
+                                    <button
+                                       onClick={handleAddTaskToStage}
+                                       disabled={!selectedStageForTask || !newTaskTitle.trim()}
+                                       className="flex-1 py-2 bg-gold-600 hover:bg-gold-700 disabled:bg-neutral-800 disabled:text-slate-500 text-black rounded text-sm font-medium transition-colors"
+                                    >
+                                       Thêm Task
+                                    </button>
+                                    <button
+                                       onClick={() => {
+                                          setShowAddTaskForm(false);
+                                          setSelectedStageForTask('');
+                                          setNewTaskTitle('');
+                                          setNewTaskDescription('');
+                                       }}
+                                       className="px-4 py-2 border border-neutral-700 rounded text-slate-400 hover:bg-neutral-800 text-sm font-medium transition-colors"
+                                    >
+                                       Hủy
+                                    </button>
+                                 </div>
+                              </div>
+                           </div>
+                        )}
+
+                        <div className="bg-neutral-800/30 p-3 rounded-lg border border-neutral-800 mb-3">
+                           <div className="grid grid-cols-1 gap-2 mb-2">
+                              <div>
+                                 <label className="text-xs font-medium text-slate-500 mb-1 block">Tên bước <span className="text-red-500">*</span></label>
+                                 <input
+                                    type="text"
+                                    value={newStageName}
+                                    onChange={(e) => setNewStageName(e.target.value)}
+                                    placeholder="VD: Vệ sinh, Sửa chữa..."
+                                    className="w-full p-1.5 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                 />
+                              </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-2 mb-2">
+                              <div>
+                                 <label className="text-xs font-medium text-slate-500 mb-1 block">Chi tiết</label>
+                                 <input
+                                    type="text"
+                                    value={newStageDetails}
+                                    onChange={(e) => setNewStageDetails(e.target.value)}
+                                    placeholder="Mô tả chi tiết..."
+                                    className="w-full p-1.5 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                 />
+                              </div>
+                              <div>
+                                 <label className="text-xs font-medium text-slate-500 mb-1 block">Tiêu chuẩn</label>
+                                 <input
+                                    type="text"
+                                    value={newStageStandards}
+                                    onChange={(e) => setNewStageStandards(e.target.value)}
+                                    placeholder="Tiêu chuẩn hoàn thành..."
+                                    className="w-full p-1.5 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                 />
+                              </div>
+                           </div>
+
+                           <button
+                              onClick={() => {
+                                 if (!newStageName.trim()) return;
+                                 const newStage: WorkflowStage = {
+                                    id: newStageName.toLowerCase().replace(/\s+/g, '-'),
+                                    name: newStageName,
+                                    order: stages.length
+                                 };
+
+                                 // Only add details and standards if they have values
+                                 if (newStageDetails.trim()) {
+                                    newStage.details = newStageDetails.trim();
+                                 }
+                                 if (newStageStandards.trim()) {
+                                    newStage.standards = newStageStandards.trim();
+                                 }
+
+                                 setStages([...stages, newStage]);
+                                 setNewStageName('');
+                                 setNewStageDetails('');
+                                 setNewStageStandards('');
+                              }}
+                              disabled={!newStageName.trim()}
+                              className="w-full py-1.5 bg-slate-100 hover:bg-white disabled:bg-neutral-800 text-black rounded text-sm font-medium transition-colors"
+                           >
+                              + Thêm Bước
+                           </button>
+                        </div>
+
+                        <div className="space-y-2">
+                           {stages.length === 0 && (
+                              <div className="text-center py-4 text-slate-600 text-sm border border-dashed border-neutral-800 rounded-lg">
+                                 Chưa có bước nào. Các bước này sẽ hiển thị ở Kanban Board.
+                              </div>
+                           )}
+                           {stages.sort((a, b) => a.order - b.order).map((stage, idx) => (
+                              <StageItem
+                                 key={stage.id}
+                                 stage={stage}
+                                 idx={idx}
+                                 stages={stages}
+                                 setStages={setStages}
+                              />
+                           ))}
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+
+            <div className="p-5 border-t border-neutral-800 bg-neutral-900 flex justify-end gap-3">
+               <button onClick={onClose} className="px-4 py-2 border border-neutral-700 rounded-lg text-slate-400 hover:bg-neutral-800 text-sm font-medium">Hủy</button>
+               <button
+                  onClick={handleSave}
+                  className="px-4 py-2 bg-gold-600 hover:bg-gold-700 text-black rounded-lg text-sm font-medium shadow-lg shadow-gold-900/20"
+               >
+                  Tạo Quy Trình
+               </button>
+            </div>
+         </div>
+      </div>
+   );
+};
+
+// --- Sub-component: Stage Item with Todo Steps ---
+export const StageItemWithTodos: React.FC<{
+   stage: WorkflowStage;
+   idx: number;
+   totalStages: number;
+   onMoveUp: () => void;
+   onMoveDown: () => void;
+   onDelete: () => void;
+   onUpdate: (stage: WorkflowStage) => void;
+}> = ({ stage, idx, totalStages, onMoveUp, onMoveDown, onDelete, onUpdate }) => {
+   const { members } = useAppStore();
+   const [isExpanded, setIsExpanded] = useState(false);
+   const [showMemberSelector, setShowMemberSelector] = useState(false);
+   const [newTodoTitle, setNewTodoTitle] = useState('');
+   const [newTodoNote, setNewTodoNote] = useState('');
+
+   // Edit State
+   const [editingTodo, setEditingTodo] = useState<{ id: string, title: string, description: string } | null>(null);
+
+   const [todos, setTodos] = useState<TodoStep[]>(stage.todos || []);
+
+   // Sync todos from props
+   useEffect(() => {
+      setTodos(stage.todos || []);
+   }, [stage.todos]);
+
+   const handleAddTodo = () => {
+      if (!newTodoTitle.trim()) return;
+      const newTodo: TodoStep = {
+         id: `todo-${Date.now()}`,
+         title: newTodoTitle,
+         description: newTodoNote.trim(),
+         completed: false,
+         order: todos.length
+      };
+      const updatedTodos = [...todos, newTodo];
+      setTodos(updatedTodos);
+      onUpdate({ ...stage, todos: updatedTodos });
+      setNewTodoTitle('');
+      setNewTodoNote('');
+   };
+
+   const startEditing = (todo: TodoStep) => {
+      setEditingTodo({
+         id: todo.id,
+         title: todo.title,
+         description: todo.description || ''
+      });
+   };
+
+   const saveEditing = () => {
+      if (!editingTodo || !editingTodo.title.trim()) return;
+      const updatedTodos = todos.map(t =>
+         t.id === editingTodo.id
+            ? { ...t, title: editingTodo.title, description: editingTodo.description }
+            : t
+      );
+      setTodos(updatedTodos);
+      onUpdate({ ...stage, todos: updatedTodos });
+      setEditingTodo(null);
+   };
+
+   const handleToggleTodo = (todoId: string) => {
+      const updatedTodos = todos.map(t =>
+         t.id === todoId ? { ...t, completed: !t.completed } : t
+      );
+      setTodos(updatedTodos);
+      onUpdate({ ...stage, todos: updatedTodos });
+   };
+
+   const handleRemoveTodo = (todoId: string) => {
+      const updatedTodos = todos.filter(t => t.id !== todoId).map((t, i) => ({ ...t, order: i }));
+      setTodos(updatedTodos);
+      onUpdate({ ...stage, todos: updatedTodos });
+   };
+
+   const completedCount = todos.filter(t => t.completed).length;
+
+   return (
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg shadow-sm overflow-hidden">
+         <div className="flex items-center justify-between p-3">
+            <div className="flex items-center gap-3 flex-1">
+               <button
+                  onClick={() => setIsExpanded(true)}
+                  className="text-xs px-2 py-1 bg-gold-600/20 hover:bg-gold-600/30 text-gold-400 rounded flex items-center gap-1 transition-colors"
+                  title="Thêm task cho bước này"
+               >
+                  <Plus size={12} />
+                  Task
+               </button>
+               <button
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="p-1 hover:bg-neutral-800 rounded transition-colors text-slate-500"
+               >
+                  <Plus size={16} className={`transform transition-transform ${isExpanded ? 'rotate-45' : ''}`} />
+               </button>
+               <div className="flex items-center gap-2">
+                  <GripVertical size={16} className="text-slate-600 cursor-move" />
+               </div>
+               <div className="flex-1">
+                  <h5 className="font-medium text-sm text-slate-200">{stage.name}</h5>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                     <span>Thứ tự: {idx + 1}</span>
+                     {todos.length > 0 && (
+                        <span className="bg-neutral-800 px-2 py-0.5 rounded">
+                           {completedCount}/{todos.length} todo
+                        </span>
+                     )}
+                     {stage.assignedMembers && stage.assignedMembers.length > 0 && (
+                        <div className="flex items-center gap-1">
+                           {stage.assignedMembers.slice(0, 2).map(memberId => {
+                              const member = members.find(m => m.id === memberId);
+                              if (!member) return null;
+                              return (
+                                 <div key={memberId} className="flex items-center" title={member.name}>
+                                    {member.avatar ? (
+                                       <img src={member.avatar} alt="" className="w-4 h-4 rounded-full border border-neutral-700" />
+                                    ) : (
+                                       <div className="w-4 h-4 rounded-full bg-neutral-700 flex items-center justify-center text-[8px] font-bold text-slate-300">
+                                          {member.name.charAt(0).toUpperCase()}
+                                       </div>
+                                    )}
+                                 </div>
+                              );
+                           })}
+                           {stage.assignedMembers.length > 2 && (
+                              <span className="text-[9px]">+{stage.assignedMembers.length - 2}</span>
+                           )}
+                        </div>
+                     )}
+                  </div>
+               </div>
+            </div>
+            <div className="flex items-center gap-2">
+               {idx > 0 && (
+                  <button
+                     onClick={onMoveUp}
+                     className="p-1.5 hover:bg-neutral-800 rounded text-slate-500 hover:text-slate-300"
+                     title="Di chuyển lên"
+                  >
+                     <ArrowUp size={14} />
+                  </button>
+               )}
+               {idx < totalStages - 1 && (
+                  <button
+                     onClick={onMoveDown}
+                     className="p-1.5 hover:bg-neutral-800 rounded text-slate-500 hover:text-slate-300"
+                     title="Di chuyển xuống"
+                  >
+                     <ArrowDown size={14} />
+                  </button>
+               )}
+               <div className="relative">
+                  <button
+                     onClick={() => setShowMemberSelector(!showMemberSelector)}
+                     className="text-slate-500 hover:text-blue-500 p-1"
+                     title="Gán nhân sự"
+                  >
+                     <Users size={14} />
+                  </button>
+                  {showMemberSelector && (
+                     <div className="absolute right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded-lg shadow-xl z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                        <div className="p-2 border-b border-neutral-700">
+                           <div className="text-xs font-medium text-slate-300">Chọn nhân sự</div>
+                        </div>
+                        <div className="p-2 space-y-1">
+                           {members.map(member => {
+                              const isSelected = stage.assignedMembers?.includes(member.id) || false;
+                              return (
+                                 <label
+                                    key={member.id}
+                                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-neutral-700 rounded cursor-pointer"
+                                 >
+                                    <input
+                                       type="checkbox"
+                                       checked={isSelected}
+                                       onChange={(e) => {
+                                          const currentMembers = stage.assignedMembers || [];
+                                          const newMembers = e.target.checked
+                                             ? [...currentMembers, member.id]
+                                             : currentMembers.filter(id => id !== member.id);
+                                          onUpdate({ ...stage, assignedMembers: newMembers });
+                                       }}
+                                       className="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500"
+                                    />
+                                    <div className="flex items-center gap-2 flex-1">
+                                       {member.avatar ? (
+                                          <img src={member.avatar} alt="" className="w-5 h-5 rounded-full" />
+                                       ) : (
+                                          <div className="w-5 h-5 rounded-full bg-neutral-700 flex items-center justify-center text-[10px] font-bold text-slate-300">
+                                             {member.name.charAt(0).toUpperCase()}
+                                          </div>
+                                       )}
+                                       <span className="text-xs text-slate-300">{member.name}</span>
+                                    </div>
+                                 </label>
+                              );
+                           })}
+                        </div>
+                     </div>
+                  )}
+               </div>
+               <button
+                  onClick={onDelete}
+                  className="text-slate-500 hover:text-red-500 p-1"
+               >
+                  <X size={16} />
+               </button>
+            </div>
+         </div>
+
+         {/* Stage Details and Standards - Inline */}
+         <div className="border-t border-neutral-800 px-3 py-2 bg-neutral-900/30">
+            <div className="flex items-start gap-4 text-xs">
+               <div className="flex-shrink-0">
+                  <span className="font-medium text-slate-400">Tên:</span>
+                  <span className="ml-1 text-slate-300">{stage.name}</span>
+               </div>
+               {stage.details && (
+                  <div className="flex-1">
+                     <span className="font-medium text-slate-400">Nội dung:</span>
+                     <span className="ml-1 text-slate-300">{stage.details}</span>
+                  </div>
+               )}
+               {stage.standards && (
+                  <div className="flex-1">
+                     <span className="font-medium text-slate-400">Tiêu chuẩn:</span>
+                     <span className="ml-1 text-slate-300">{stage.standards}</span>
+                  </div>
+               )}
+            </div>
+         </div>
+
+         {/* Show todos preview always */}
+         {todos.length > 0 && (
+            <div className="border-t border-neutral-800 px-3 py-2 bg-neutral-900/50">
+               <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {todos.slice(0, 3).map((todo) => (
+                     <div key={todo.id} className="flex items-center gap-2 text-xs">
+                        <div className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0" />
+                        <span className="text-slate-300 truncate">
+                           {todo.title}
+                        </span>
+                     </div>
+                  ))}
+                  {todos.length > 3 && (
+                     <div className="text-xs text-slate-500 italic px-1">
+                        +{todos.length - 3} công việc khác...
+                     </div>
+                  )}
+               </div>
+            </div>
+         )}
+
+         {isExpanded && (
+            <div className="border-t border-neutral-800 p-4 bg-neutral-900/50 space-y-3">
+               {/* Add Todo Form */}
+               <div className="space-y-2">
+                  <div className="flex gap-2">
+                     <input
+                        type="text"
+                        value={newTodoTitle}
+                        onChange={(e) => setNewTodoTitle(e.target.value)}
+                        onKeyPress={(e) => {
+                           if (e.key === 'Enter' && !e.shiftKey) {
+                              handleAddTodo();
+                           }
+                        }}
+                        placeholder="Thêm task..."
+                        className="flex-1 px-3 py-1.5 border border-neutral-700 rounded text-xs bg-neutral-800 text-slate-200 outline-none focus:border-gold-500"
+                     />
+                     <input
+                        type="text"
+                        value={newTodoNote}
+                        onChange={(e) => setNewTodoNote(e.target.value)}
+                        placeholder="Ghi chú..."
+                        className="flex-1 px-3 py-1.5 border border-neutral-700 rounded text-xs bg-neutral-800 text-slate-200 outline-none focus:border-gold-500"
+                     />
+                     <button
+                        onClick={handleAddTodo}
+                        disabled={!newTodoTitle.trim()}
+                        className="px-3 py-1.5 bg-gold-600 hover:bg-gold-700 disabled:bg-neutral-700 text-black rounded text-xs font-medium transition-colors"
+                     >
+                        +
+                     </button>
+                  </div>
+               </div>
+
+               {/* Todo List */}
+               <div className="space-y-2">
+                  {todos.length === 0 ? (
+                     <div className="text-center py-3 text-slate-600 text-xs border border-dashed border-neutral-700 rounded">
+                        Chưa có bước nhỏ nào. Thêm các chi tiết công việc ở đây.
+                     </div>
+                  ) : (
+                     todos.map((todo) => (
+                        <div key={todo.id} className="bg-neutral-800/50 rounded border border-neutral-700/50 hover:border-neutral-700 transition-colors">
+                           <div className="flex items-center gap-2 p-2 relative">
+                              {/* BulletPoint */}
+                              <div className="flex-shrink-0 self-start mt-2">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                              </div>
+
+                              {/* Content or Edit Form */}
+                              {editingTodo && editingTodo.id === todo.id ? (
+                                 <div className="flex-1 space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                                    {/* Edit Title */}
+                                    <div>
+                                       <input
+                                          value={editingTodo.title}
+                                          onChange={e => setEditingTodo({ ...editingTodo, title: e.target.value })}
+                                          className="w-full px-2 py-1.5 text-sm font-medium border border-neutral-600 rounded bg-neutral-900 text-slate-200 focus:border-gold-500 focus:ring-1 focus:ring-gold-500 outline-none placeholder-slate-500"
+                                          autoFocus
+                                          placeholder="Tên công việc..."
+                                          onKeyDown={e => {
+                                             if (e.key === 'Enter') {
+                                                // Focus next input or save
+                                                const descInput = document.getElementById(`edit-desc-${todo.id}`);
+                                                if (descInput) descInput.focus();
+                                             }
+                                          }}
+                                       />
+                                    </div>
+                                    {/* Edit Description & Buttons */}
+                                    <div className="flex gap-2">
+                                       <input
+                                          id={`edit-desc-${todo.id}`}
+                                          value={editingTodo.description}
+                                          onChange={e => setEditingTodo({ ...editingTodo, description: e.target.value })}
+                                          className="flex-1 px-2 py-1.5 text-xs border border-neutral-700 rounded bg-neutral-900 text-slate-300 focus:border-gold-500 outline-none placeholder-slate-600"
+                                          placeholder="Ghi chú (tùy chọn)..."
+                                          onKeyDown={e => {
+                                             if (e.key === 'Enter') saveEditing();
+                                          }}
+                                       />
+                                       <div className="flex gap-1">
+                                          <button
+                                             onClick={saveEditing}
+                                             className="px-3 py-1.5 bg-gold-600 text-black text-xs font-bold rounded hover:bg-gold-700 transition-colors flex items-center gap-1"
+                                             title="Lưu thay đổi"
+                                          >
+                                             Lưu
+                                          </button>
+                                          <button
+                                             onClick={() => setEditingTodo(null)}
+                                             className="px-3 py-1.5 bg-neutral-700 text-slate-300 text-xs font-medium rounded hover:bg-neutral-600 transition-colors"
+                                             title="Hủy bỏ"
+                                          >
+                                             Hủy
+                                          </button>
+                                       </div>
+                                    </div>
+                                 </div>
+                              ) : (
+                                 <div className="flex-1 group" onClick={() => startEditing(todo)} title="Nhấn để sửa">
+                                    <div className="flex justify-between items-start">
+                                       <span className={`text-sm font-medium transition-colors ${todo.completed ? 'text-slate-500 line-through' : 'text-slate-300 group-hover:text-gold-400 cursor-pointer'}`}>
+                                          {todo.title}
+                                       </span>
+                                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                          <button
+                                             onClick={(e) => { e.stopPropagation(); startEditing(todo); }}
+                                             className="text-slate-600 hover:text-blue-400 p-1 transition-colors"
+                                             title="Sửa công việc"
+                                          >
+                                             <Edit size={14} />
+                                          </button>
+                                          <button
+                                             onClick={(e) => { e.stopPropagation(); handleRemoveTodo(todo.id); }}
+                                             className="text-slate-600 hover:text-red-500 p-1 transition-colors"
+                                             title="Xóa công việc"
+                                          >
+                                             <X size={14} />
+                                          </button>
+                                       </div>
+                                    </div>
+                                    {todo.description && (
+                                       <span className="text-xs text-slate-500 block mt-0.5 group-hover:text-slate-400">{todo.description}</span>
+                                    )}
+                                 </div>
+                              )}
+                           </div>
+                        </div>
+                     ))
+                  )}
+               </div>
+            </div>
+         )}
+      </div>
+   );
+};
+
+// --- Sub-component: View Workflow Modal (Read-only with task management) ---
+const WorkflowViewModal: React.FC<{ workflow: WorkflowDefinition, onClose: () => void }> = ({ workflow, onClose }) => {
+   let inventory: InventoryItem[] = [];
+   try {
+      const appStore = useAppStore();
+      inventory = appStore?.inventory || [];
+   } catch (e) {
+      console.warn('useAppStore error in WorkflowViewModal:', e);
+   }
+   const [stages, setStages] = useState<WorkflowStage[]>(workflow.stages || []);
+
+   const handleUpdateStage = async (updatedStage: WorkflowStage) => {
+      const updatedStages = stages.map(s => s.id === updatedStage.id ? updatedStage : s);
+      setStages(updatedStages);
+
+      // Save to bảng riêng cac_buoc_quy_trinh
+      try {
+         await supabase
+            .from(DB_TABLES.WORKFLOW_STAGES)
+            .update({
+               ten_buoc: updatedStage.name,
+               thu_tu: updatedStage.order,
+               chi_tiet: updatedStage.details || null,
+               tieu_chuan: updatedStage.standards || null
+            })
+            .eq('id', updatedStage.id)
+            .eq('id_quy_trinh', workflow.id);
+      } catch (error) {
+         console.error('Error saving stage:', error);
+      }
+   };
+
+   return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+         <div className="bg-neutral-900 rounded-xl shadow-2xl border border-neutral-800 w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-neutral-800">
+               <div>
+                  <h2 className="text-xl font-serif font-bold text-slate-100">{workflow.label}</h2>
+                  <p className="text-sm text-slate-400 mt-1">{workflow.description || 'Xem chi tiết quy trình'}</p>
+               </div>
+               <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-full transition-colors text-slate-400">
+                  <X size={20} />
+               </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+               {/* General Info */}
+               <div className="bg-blue-900/10 p-4 rounded-lg border border-blue-900/30">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                     <div>
+                        <span className="text-slate-500">Phòng ban:</span>
+                        <span className="ml-2 text-slate-300">{workflow.department}</span>
+                     </div>
+                     <div className="col-span-2">
+                        <span className="text-slate-500">Áp dụng cho:</span>
+                        <span className="ml-2 text-slate-300">{workflow.types.length > 0 ? workflow.types.join(', ') : 'Tất cả dịch vụ'}</span>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Materials */}
+               {workflow.materials && workflow.materials.length > 0 && (
+                  <div>
+                     <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
+                        <Package size={18} className="text-gold-500" />
+                        Nguyên Vật Liệu ({workflow.materials.length})
+                     </h4>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {workflow.materials.map((mat, idx) => {
+                           const item = (inventory || []).find(inv => inv.id === mat.itemId || inv.id === mat.inventoryItemId);
+                           return (
+                              <div key={idx} className="bg-neutral-800/30 p-3 rounded-lg border border-neutral-800">
+                                 <div className="flex justify-between items-start">
+                                    <span className="text-sm text-slate-300 font-medium">{item?.name || mat.itemId}</span>
+                                    <span className="text-xs text-slate-500">{mat.quantity.toLocaleString('vi-VN')} {item?.unit || ''}</span>
+                                 </div>
+                              </div>
+                           );
+                        })}
+                     </div>
+                  </div>
+               )}
+
+               {/* Stages with Tasks */}
+               <div>
+                  <h4 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                     <Columns size={18} className="text-gold-500" />
+                     Các Bước Xử Lý ({stages.length})
+                  </h4>
+
+                  {stages.length === 0 ? (
+                     <div className="text-center py-8 text-slate-600 text-sm border border-dashed border-neutral-800 rounded-lg">
+                        Chưa có bước nào được cấu hình
+                     </div>
+                  ) : (
+                     <div className="space-y-3">
+                        {stages.sort((a, b) => a.order - b.order).map((stage, idx) => (
+                           <StageItemWithTodos
+                              key={stage.id}
+                              stage={stage}
+                              idx={idx}
+                              totalStages={stages.length}
+                              onMoveUp={() => { }}
+                              onMoveDown={() => { }}
+                              onDelete={() => { }}
+                              onUpdate={handleUpdateStage}
+                           />
+                        ))}
+                     </div>
+                  )}
+               </div>
+
+               {/* Assigned Members */}
+               {workflow.assignedMembers && workflow.assignedMembers.length > 0 && (
+                  <div>
+                     <h4 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
+                        <Users size={18} className="text-gold-500" />
+                        Nhân Sự Phụ Trách ({workflow.assignedMembers.length})
+                     </h4>
+                     <div className="flex flex-wrap gap-2">
+                        {workflow.assignedMembers.map(memberId => {
+                           const member = MOCK_MEMBERS.find(m => m.id === memberId);
+                           if (!member) return null;
+                           return (
+                              <div
+                                 key={memberId}
+                                 className="px-3 py-2 bg-neutral-800/50 border border-neutral-700 rounded-lg"
+                              >
+                                 <div className="text-sm font-medium text-slate-200">{member.name}</div>
+                                 <div className="text-xs text-slate-500">{member.role}</div>
+                              </div>
+                           );
+                        })}
+                     </div>
+                  </div>
+               )}
+            </div>
+
+            <div className="border-t border-neutral-800 p-4">
+               <button
+                  onClick={onClose}
+                  className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 text-slate-300 rounded-lg font-medium transition-colors"
+               >
+                  Đóng
+               </button>
+            </div>
+         </div>
+      </div>
+   );
+};
+
+// --- Sub-component: Config Modal ---
+// WorkflowConfigModal đã được chuyển sang component riêng WorkflowConfig.tsx

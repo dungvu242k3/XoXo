@@ -1,0 +1,265 @@
+{
+  "khach_hang": {
+    "CUST-001": {
+      "id": "CUST-001",
+      "ten": "Nguyễn Văn A",
+      "sdt": "0901234567",
+      "email": "nguyenvana@example.com",
+      "dia_chi": "123 Đường ABC, Quận 1, TP.HCM",
+      "hang_thanh_vien": "vip",
+      "tong_chi_tieu": 5000000,
+      "lan_cuoi_ghe": "2024-01-15T10:00:00Z",
+      "ghi_chu": "Khách hàng thân thiết",
+      "nguon_khach": "Facebook",
+      "trang_thai": "Thân thiết",
+      "id_nhan_vien_phu_trach": "MEM-001",
+      "so_lan_tuong_tac": 5,
+      "nhom_khach": "VIP Group",
+      "ngay_tao": "2024-01-10T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-15T10:00:00Z"
+    }
+  },
+  "don_hang": {
+    "ORD-2024-0001": {
+      "id": "ORD-2024-0001",
+      "id_khach_hang": "CUST-001",
+      "ten_khach_hang": "Nguyễn Văn A",
+      "tong_tien": 1500000,
+      "tien_coc": 500000,
+      "trang_thai": "dang_xu_ly",
+      "ngay_du_kien_giao": "2024-01-22T17:00:00Z",
+      "ghi_chu": "Khách hàng VIP",
+      "ngay_tao": "2024-01-15T09:00:00Z",
+      "ngay_cap_nhat": "2024-01-15T09:00:00Z"
+    }
+  },
+  "hang_muc_dich_vu": {
+    "ORD-2024-0001-SVC-001": {
+      "id": "ORD-2024-0001-SVC-001",
+      "id_don_hang": "ORD-2024-0001",
+      "ten_hang_muc": "Spa Túi Xách Premium",
+      "loai": "ve_sinh",
+      "don_gia": 1500000,
+      "so_luong": 1,
+      "trang_thai": "dang_xu_ly",
+      "id_ky_thuat_vien": "MEM-002",
+      "anh_truoc": "https://example.com/before.jpg",
+      "anh_sau": null,
+      "la_san_pham": false,
+      "id_dich_vu_goc": "SVC-001",
+      "id_quy_trinh": "WF-001",
+      "lich_su_thuc_hien": [
+        {
+          "stageId": "stage-1",
+          "stageName": "Vệ sinh",
+          "enteredAt": 1705320000000,
+          "leftAt": 1705323600000,
+          "duration": 3600000,
+          "performedBy": "MEM-002"
+        }
+      ],
+      "cap_nhat_cuoi": 1705323600000,
+      "nhat_ky_ky_thuat": [
+        {
+          "id": "log-1",
+          "content": "Đã hoàn thành vệ sinh",
+          "author": "MEM-002",
+          "timestamp": "2024-01-15T10:00:00",
+          "stage": "Vệ sinh"
+        }
+      ],
+      "ngay_tao": "2024-01-15T09:00:00Z",
+      "ngay_cap_nhat": "2024-01-15T10:00:00Z"
+    }
+  },
+  "dich_vu_spa": {
+    "SVC-001": {
+      "id": "SVC-001",
+      "ten_dich_vu": "Spa Túi Xách Premium",
+      "danh_muc": "TÚI QUAI > custom-10004 > custom-10005",
+      "duong_dan_danh_muc": ["TÚI QUAI", "custom-10004", "custom-10005"],
+      "gia_niem_yet": 1500000,
+      "mo_ta": "Dịch vụ spa cao cấp cho túi xách",
+      "anh_dich_vu": "https://example.com/image.jpg",
+      "id_quy_trinh": "WF-001",
+      "cac_buoc_quy_trinh": [
+        {
+          "id": "WF-001",
+          "order": 0
+        },
+        {
+          "id": "WF-002",
+          "order": 1
+        }
+      ],
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-01T08:00:00Z"
+    }
+  },
+  "kho_vat_tu": {
+    "INV-001": {
+      "id": "INV-001",
+      "ma_sku": "XOXO_2024_01_ABC123",
+      "ten_vat_tu": "Hóa chất vệ sinh cao cấp",
+      "danh_muc": "hoa_chat",
+      "so_luong_ton": 100,
+      "don_vi_tinh": "Chai",
+      "nguong_toi_thieu": 20,
+      "gia_nhap": 50000,
+      "nha_cung_cap": "Nhà cung cấp ABC",
+      "lan_nhap_cuoi": "2024-01-10T08:00:00Z",
+      "anh_vat_tu": "https://example.com/chemical.jpg",
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-10T08:00:00Z"
+    }
+  },
+  "san_pham_ban_le": {
+    "PROD-001": {
+      "id": "PROD-001",
+      "ten_san_pham": "Túi Xách Da Thật",
+      "danh_muc": "Túi Xách",
+      "gia_ban": 2000000,
+      "ton_kho": 50,
+      "anh_san_pham": "https://example.com/product.jpg",
+      "mo_ta": "Túi xách da thật cao cấp",
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-01T08:00:00Z"
+    }
+  },
+  "nhan_su": {
+    "MEM-001": {
+      "id": "MEM-001",
+      "ho_ten": "Nguyễn Thị B",
+      "vai_tro": "tu_van",
+      "sdt": "0901234568",
+      "email": "nguyenthib@example.com",
+      "trang_thai": "hoat_dong",
+      "anh_dai_dien": "https://example.com/avatar1.jpg",
+      "chuyen_mon": null,
+      "phong_ban": "kinh_doanh",
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-01T08:00:00Z"
+    },
+    "MEM-002": {
+      "id": "MEM-002",
+      "ho_ten": "Trần Văn C",
+      "vai_tro": "ky_thuat",
+      "sdt": "0901234569",
+      "email": "tranvanc@example.com",
+      "trang_thai": "hoat_dong",
+      "anh_dai_dien": "https://example.com/avatar2.jpg",
+      "chuyen_mon": "Spa túi xách",
+      "phong_ban": "ky_thuat",
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-01T08:00:00Z"
+    },
+    "MEM-003": {
+      "id": "MEM-003",
+      "ho_ten": "Lê Thị D",
+      "vai_tro": "qc",
+      "sdt": "0901234570",
+      "email": "lethid@example.com",
+      "trang_thai": "hoat_dong",
+      "anh_dai_dien": null,
+      "chuyen_mon": "Kiểm tra chất lượng",
+      "phong_ban": "qc",
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-01T08:00:00Z"
+    }
+  },
+  "quy_trinh": {
+    "WF-001": {
+      "id": "WF-001",
+      "ten_quy_trinh": "Quy trình Spa Túi Xách",
+      "loai_ap_dung": ["Cleaning", "Repair"],
+      "mo_ta": "Quy trình xử lý túi xách từ vệ sinh đến hoàn thiện",
+      "phong_ban_phu_trach": "spa",
+      "vat_tu_can_thiet": [
+        {
+          "inventoryItemId": "INV-001",
+          "quantity": 0.5
+        },
+        {
+          "inventoryItemId": "INV-002",
+          "quantity": 0.2
+        }
+      ],
+      "cac_buoc": [
+        {
+          "id": "stage-1",
+          "name": "Vệ sinh",
+          "order": 0,
+          "color": "bg-blue-500",
+          "details": "Vệ sinh bề mặt túi xách",
+          "standards": "Sạch sẽ, không còn vết bẩn",
+          "todos": [
+            {
+              "id": "todo-1",
+              "title": "Lau bề mặt",
+              "description": "Lau sạch bề mặt túi với dung dịch chuyên dụng",
+              "completed": false,
+              "order": 0
+            },
+            {
+              "id": "todo-2",
+              "title": "Vệ sinh bên trong",
+              "description": "Làm sạch bên trong túi",
+              "completed": false,
+              "order": 1
+            }
+          ]
+        },
+        {
+          "id": "stage-2",
+          "name": "Sửa chữa",
+          "order": 1,
+          "color": "bg-orange-500",
+          "details": "Sửa chữa các vết hỏng",
+          "standards": "Hoàn thiện, không còn lỗi",
+          "todos": []
+        },
+        {
+          "id": "stage-3",
+          "name": "Mạ vàng",
+          "order": 2,
+          "color": "bg-yellow-500",
+          "details": "Mạ vàng các chi tiết kim loại",
+          "standards": "Đồng đều, bóng đẹp",
+          "todos": []
+        },
+        {
+          "id": "stage-4",
+          "name": "QC",
+          "order": 3,
+          "color": "bg-green-500",
+          "details": "Kiểm tra chất lượng",
+          "standards": "Đạt tiêu chuẩn",
+          "todos": []
+        }
+      ],
+      "nhan_vien_duoc_giao": ["MEM-002", "MEM-003"],
+      "ngay_tao": "2024-01-01T08:00:00Z",
+      "ngay_cap_nhat": "2024-01-01T08:00:00Z"
+    }
+  },
+  "thong_bao": {
+    "NOTIF-001": {
+      "id": "NOTIF-001",
+      "id_don_hang": "ORD-2024-0001",
+      "id_muc_lien_quan": "ORD-2024-0001-SVC-001",
+      "loai_thong_bao": "status_change",
+      "noi_dung": "Đơn hàng ORD-2024-0001 đã chuyển sang trạng thái Processing",
+      "da_doc": false,
+      "ngay_tao": "2024-01-15T09:00:00Z"
+    },
+    "NOTIF-002": {
+      "id": "NOTIF-002",
+      "id_don_hang": "ORD-2024-0001",
+      "id_muc_lien_quan": "ORD-2024-0001-SVC-001",
+      "loai_thong_bao": "stage_complete",
+      "noi_dung": "Hoàn thành giai đoạn Vệ sinh cho sản phẩm Spa Túi Xách Premium",
+      "da_doc": false,
+      "ngay_tao": "2024-01-15T10:00:00Z"
+    }
+  }
+}

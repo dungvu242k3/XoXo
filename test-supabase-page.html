@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Supabase Connection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .test-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        button {
+            background: #fbbf24;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+        }
+        button:hover {
+            background: #f59e0b;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test Kết Nối Supabase</h1>
+    
+    <div class="test-section">
+        <h2>1. Kiểm tra kết nối</h2>
+        <button onclick="testConnection()">Test Connection</button>
+        <div id="connection-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Đếm số dịch vụ</h2>
+        <button onclick="countServices()">Đếm Dịch Vụ</button>
+        <div id="count-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Lấy tất cả dịch vụ</h2>
+        <button onclick="getAllServices()">Lấy Tất Cả</button>
+        <div id="all-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. Thêm dịch vụ test</h2>
+        <input type="text" id="service-name" placeholder="Tên dịch vụ" value="Dịch vụ test">
+        <input type="number" id="service-price" placeholder="Giá" value="100000">
+        <button onclick="addService()">Thêm Dịch Vụ</button>
+        <div id="add-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. Xóa dịch vụ test</h2>
+        <input type="text" id="delete-id" placeholder="ID dịch vụ cần xóa">
+        <button onclick="deleteService()">Xóa Dịch Vụ</button>
+        <div id="delete-result" class="result"></div>
+    </div>
+
+    <script>
+        const supabaseUrl = 'https://edwwzlpmgqqikhtxbzwo.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkd3d6bHBtZ3FxaWtodHhiendvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3MTI1NDgsImV4cCI6MjA4MzI4ODU0OH0.Q0S0iGTnJEQ1tYpw68B0Rzn9K6g5l-DcuHVZjToR9sQ';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+        
+        function log(elementId, message, isError = false) {
+            const el = document.getElementById(elementId);
+            el.className = 'result ' + (isError ? 'error' : 'success');
+            el.textContent = message;
+        }
+        
+        async function testConnection() {
+            try {
+                log('connection-result', 'Đang kiểm tra...');
+                const { data, error } = await supabase.from('dich_vu_spa').select('count').limit(1);
+                if (error) throw error;
+                log('connection-result', '✅ Kết nối thành công!');
+            } catch (error) {
+                log('connection-result', '❌ Lỗi: ' + JSON.stringify(error, null, 2), true);
+            }
+        }
+        
+        async function countServices() {
+            try {
+                log('count-result', 'Đang đếm...');
+                const { count, error } = await supabase
+                    .from('dich_vu_spa')
+                    .select('*', { count: 'exact', head: true });
+                if (error) throw error;
+                log('count-result', `✅ Có ${count} dịch vụ trong bảng`);
+            } catch (error) {
+                log('count-result', '❌ Lỗi: ' + JSON.stringify(error, null, 2), true);
+            }
+        }
+        
+        async function getAllServices() {
+            try {
+                log('all-result', 'Đang lấy dữ liệu...');
+                const { data, error } = await supabase
+                    .from('dich_vu_spa')
+                    .select('*')
+                    .order('ngay_tao', { ascending: false })
+                    .limit(10);
+                if (error) throw error;
+                log('all-result', `✅ Lấy được ${data.length} dịch vụ:\n\n` + JSON.stringify(data, null, 2));
+            } catch (error) {
+                log('all-result', '❌ Lỗi: ' + JSON.stringify(error, null, 2), true);
+            }
+        }
+        
+        async function addService() {
+            try {
+                const name = document.getElementById('service-name').value;
+                const price = parseFloat(document.getElementById('service-price').value);
+                
+                if (!name || !price) {
+                    log('add-result', '❌ Vui lòng điền đầy đủ thông tin', true);
+                    return;
+                }
+                
+                log('add-result', 'Đang thêm...');
+                const serviceData = {
+                    id: `TEST-${Date.now()}`,
+                    ten_dich_vu: name,
+                    danh_muc: 'Test',
+                    duong_dan_danh_muc: ['Test'],
+                    gia_niem_yet: price,
+                    mo_ta: 'Dịch vụ test từ trang HTML',
+                    anh_dich_vu: '',
+                    id_quy_trinh: null,
+                    cac_buoc_quy_trinh: []
+                };
+                
+                const { data, error } = await supabase
+                    .from('dich_vu_spa')
+                    .insert(serviceData)
+                    .select();
+                
+                if (error) throw error;
+                log('add-result', '✅ Thêm thành công!\n\n' + JSON.stringify(data, null, 2));
+            } catch (error) {
+                log('add-result', '❌ Lỗi: ' + JSON.stringify(error, null, 2), true);
+            }
+        }
+        
+        async function deleteService() {
+            try {
+                const id = document.getElementById('delete-id').value;
+                if (!id) {
+                    log('delete-result', '❌ Vui lòng nhập ID', true);
+                    return;
+                }
+                
+                log('delete-result', 'Đang xóa...');
+                const { error } = await supabase
+                    .from('dich_vu_spa')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                log('delete-result', `✅ Đã xóa dịch vụ có ID: ${id}`);
+            } catch (error) {
+                log('delete-result', '❌ Lỗi: ' + JSON.stringify(error, null, 2), true);
+            }
+        }
+        
+        // Auto test connection on load
+        window.onload = () => {
+            testConnection();
+            countServices();
+        };
+    </script>
+</body>
+</html>
+
