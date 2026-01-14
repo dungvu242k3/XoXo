@@ -1,40 +1,37 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Users,
-  ShoppingBag,
-  Package,
-  Wrench,
-  Settings,
   Bell,
-  Menu,
-  ChevronRight,
-  LogOut,
-  Columns,
-  Layers,
-  Tag,
-  GitMerge,
   Briefcase,
   Check,
-  X
+  ChevronRight,
+  Columns,
+  GitMerge,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  ScrollText,
+  Settings,
+  ShoppingBag,
+  Tag,
+  Users,
+  Wrench
 } from 'lucide-react';
-import { Dashboard } from './components/Dashboard';
-import { Orders } from './components/Orders';
-import { TechnicianView } from './components/TechnicianView';
-import { KanbanBoard } from './components/KanbanBoard';
-import { Inventory } from './components/Inventory';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { HashRouter, Link, Route, Routes, useLocation } from 'react-router-dom';
 import { Customers } from './components/Customers';
-import { Services } from './components/Services';
-import { Products } from './components/Products';
-import { Workflows } from './components/Workflows';
-import { WorkflowConfig } from './components/WorkflowConfig';
+import { Dashboard } from './components/Dashboard';
+import { Inventory } from './components/Inventory';
+import { KanbanBoard } from './components/KanbanBoard';
 import { Members } from './components/Members';
+import { Orders } from './components/Orders';
+import { Products } from './components/Products';
+import { Services } from './components/Services';
 import { Settings as SettingsPage } from './components/Settings';
-import { Login } from './components/Login';
-import { DEFAULT_COMPANY_CONFIG, MOCK_MEMBERS } from './constants';
+import { TechnicianView } from './components/TechnicianView';
+import { WorkflowConfig } from './components/WorkflowConfig';
+import { Workflows } from './components/Workflows';
+import { DEFAULT_COMPANY_CONFIG } from './constants';
 import { AppProvider, useAppStore } from './context';
-import { Order, ServiceItem, Member } from './types';
+import { Member, Order, ServiceItem } from './types';
 // Removed supabase import - notifications now use localStorage only
 
 
@@ -86,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, currentUser }) => (
       <SidebarItem to="/customers" icon={Users} label="Khách hàng (CRM)" />
 
       <div className="text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 mb-2 mt-6">Quản Lý</div>
-      <SidebarItem to="/services" label="Dịch vụ & Bảng giá" />
+      <SidebarItem to="/services" icon={ScrollText} label="Dịch vụ & Bảng giá" />
       <SidebarItem to="/products" icon={Tag} label="Sản phẩm bán" />
       <SidebarItem to="/inventory" icon={Package} label="Kho vật tư" />
       <SidebarItem to="/members" icon={Briefcase} label="Nhân sự" />
@@ -107,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, currentUser }) => (
           <div>{currentUser.role}</div>
         </div>
       )}
-      <button 
+      <button
         onClick={onLogout}
         className="flex items-center gap-3 w-full px-4 py-2 text-slate-500 hover:text-red-500 hover:bg-red-900/10 rounded-lg transition-colors"
       >
@@ -363,7 +360,7 @@ const loadUserFromStorage = (): Member => {
     console.warn('⚠️ localStorage not available, using default user');
     return DEFAULT_USER;
   }
-  
+
   try {
     const userStr = localStorage.getItem('currentUser');
     if (userStr) {
@@ -379,7 +376,7 @@ const loadUserFromStorage = (): Member => {
   } catch (e) {
     console.warn('⚠️ Error loading user from localStorage:', e);
   }
-  
+
   // Auto-login with default user for testing
   try {
     localStorage.setItem('currentUser', JSON.stringify(DEFAULT_USER));
@@ -400,7 +397,7 @@ const AppContent: React.FC = () => {
       return DEFAULT_USER;
     }
   });
-  
+
   const [isAuthenticated] = useState<boolean>(() => {
     try {
       const authStatus = localStorage.getItem('isAuthenticated');

@@ -252,7 +252,7 @@ export const TableFilter: React.FC<TableFilterProps> = ({ onFilterChange, classN
 
         {/* Date Picker Dropdown */}
         {isDatePickerOpen && (
-          <div className="absolute top-full right-0 mt-2 w-80 bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl shadow-black/30 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="absolute top-full left-0 mt-2 w-80 bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl shadow-black/30 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="p-4">
               <div className="text-sm text-slate-400 font-semibold mb-4 flex items-center gap-2">
                 <Calendar size={16} />
