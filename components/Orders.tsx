@@ -1,6 +1,7 @@
 import { ArrowLeft, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Circle, Columns, Download, Edit, Eye, FileText, Image as ImageIcon, MoreHorizontal, Package, Plus, Printer, QrCode, Search, ShoppingBag, Square, Trash2, Upload, Users, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../context';
 import { DB_PATHS, supabase } from '../supabase';
 import { Member, Order, OrderStatus, ServiceCatalogItem, ServiceItem, ServiceType, TodoStep, WorkflowDefinition } from '../types';
@@ -642,7 +643,12 @@ const WorkflowStagesTasksView: React.FC<{
 
 export const Orders: React.FC = () => {
   const { orders, addOrder, updateOrder, deleteOrder, customers, products, members } = useAppStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [services, setServices] = useState<ServiceCatalogItem[]>([]);
+
+  // Get member filter from URL
+  const assignedMemberId = searchParams.get('assignedMemberId');
+  const filteredMemberName = searchParams.get('memberName');
 
   // Debug: Log orders để kiểm tra
   useEffect(() => {
@@ -711,6 +717,15 @@ export const Orders: React.FC = () => {
         if (!filters.statuses.includes(order.status)) return false;
       }
 
+      // Filter by Assigned Member (URL param)
+      if (assignedMemberId) {
+        const hasAssignment = order.items?.some(item =>
+          item.assignedMembers?.includes(assignedMemberId) ||
+          (item.commissions && item.commissions[assignedMemberId])
+        );
+        if (!hasAssignment) return false;
+      }
+
       return true;
     });
 
@@ -723,7 +738,7 @@ export const Orders: React.FC = () => {
     });
 
     return filtered;
-  }, [orders, searchText, filters, customers]);
+  }, [orders, searchText, filters, customers, assignedMemberId]);
 
   const updateFilter = (key: keyof typeof filters, val: string[]) => setFilters(prev => ({ ...prev, [key]: val }));
 
@@ -732,8 +747,21 @@ export const Orders: React.FC = () => {
     const count = filteredOrders.length;
     const revenue = filteredOrders.reduce((sum, o) => sum + o.totalAmount, 0);
     const deposit = filteredOrders.reduce((sum, o) => sum + (o.deposit || 0), 0);
-    return { count, revenue, deposit };
-  }, [filteredOrders]);
+
+    // Calculate total commission for the assigned member if selected
+    let memberCommission = 0;
+    if (assignedMemberId) {
+      filteredOrders.forEach(order => {
+        order.items?.forEach(item => {
+          if (item.commissions && item.commissions[assignedMemberId]) {
+            memberCommission += (item.commissions[assignedMemberId].value || 0);
+          }
+        });
+      });
+    }
+
+    return { count, revenue, deposit, memberCommission };
+  }, [filteredOrders, assignedMemberId]);
 
   // Fetch Services & Workflows from Supabase
   useEffect(() => {
@@ -1765,6 +1793,28 @@ export const Orders: React.FC = () => {
           )}
         </div>
 
+        {/* Member Filter Banner */}
+        {assignedMemberId && (
+          <div className="flex items-center justify-between bg-gold-900/10 border border-gold-900/30 px-4 py-2 rounded-lg animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-4 text-gold-500">
+              <div className="flex items-center gap-2">
+                <Users size={16} />
+                <span className="text-sm">Đang lọc đơn hàng phụ trách bởi: <strong className="font-bold text-gold-400">{filteredMemberName ? decodeURIComponent(filteredMemberName) : 'Nhân viên'}</strong></span>
+              </div>
+              <div className="h-4 w-px bg-gold-900/30"></div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">Tổng hoa hồng: <strong className="font-bold text-emerald-400">{formatPrice(stats.memberCommission)} ₫</strong></span>
+              </div>
+            </div>
+            <button
+              onClick={() => setSearchParams({})}
+              className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-slate-400 hover:text-slate-200 text-xs rounded transition-colors"
+            >
+              Xóa bộ lọc
+            </button>
+          </div>
+        )}
+
         {/* ROW 3: Stats */}
         <div className="flex flex-wrap gap-6 sm:gap-12 pt-2 border-t border-neutral-800 text-sm">
           <div className="flex items-center gap-2">
@@ -1797,6 +1847,7 @@ export const Orders: React.FC = () => {
                 <th className="p-4 min-w-[200px]">Khách Hàng</th>
                 <th className="p-4 w-12 text-center text-slate-500"><QrCode size={14} className="mx-auto" /></th>
                 <th className="p-4">Sản Phẩm</th>
+                {assignedMemberId && <th className="p-4 text-right text-emerald-500">Hoa Hồng</th>}
                 <th className="p-4 text-right">Tổng Tiền</th>
                 <th className="p-4">Trạng Thái</th>
                 <th className="p-4 hidden md:table-cell">Ngày Hẹn</th>
@@ -1805,7 +1856,7 @@ export const Orders: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-neutral-800">
               {!orders || orders.length === 0 ? (
-                <tr><td colSpan={8} className="p-12 text-center text-slate-500">
+                <tr><td colSpan={assignedMemberId ? 9 : 8} className="p-12 text-center text-slate-500">
                   <div className="flex flex-col items-center gap-2">
                     <ShoppingBag size={48} className="text-slate-600 opacity-50" />
                     <p className="text-lg font-semibold text-slate-400">Chưa có đơn hàng nào</p>
@@ -1813,7 +1864,7 @@ export const Orders: React.FC = () => {
                   </div>
                 </td></tr>
               ) : filteredOrders.length === 0 ? (
-                <tr><td colSpan={8} className="p-12 text-center text-slate-500">
+                <tr><td colSpan={assignedMemberId ? 9 : 8} className="p-12 text-center text-slate-500">
                   <div className="flex flex-col items-center gap-2">
                     <Search size={48} className="text-slate-600 opacity-50" />
                     <p className="text-lg font-semibold text-slate-400">Không tìm thấy đơn hàng</p>
@@ -1823,6 +1874,11 @@ export const Orders: React.FC = () => {
                 </td></tr>
               ) : filteredOrders.map((order) => {
                 const isSelected = selectedOrderIds.has(order.id);
+                // Calculate commission for this order row if member filter is active
+                const orderCommission = assignedMemberId && order.items
+                  ? order.items.reduce((sum, item) => sum + ((item.commissions && item.commissions[assignedMemberId]) ? (item.commissions[assignedMemberId].value || 0) : 0), 0)
+                  : 0;
+
                 return (
                   <tr key={order.id} className={`transition-colors group ${isSelected ? 'bg-gold-900/10' : 'hover:bg-neutral-800/50'}`}>
                     <td className="p-4" onClick={(e) => toggleSelectOrder(order.id, e)}>
@@ -1850,24 +1906,33 @@ export const Orders: React.FC = () => {
                         <QrCode size={18} />
                       </button>
                     </td>
+
                     <td className="p-4">
-                      <div className="flex -space-x-2">
-                        {(order.items || []).slice(0, 4).map((item, idx) => (
-                          <div key={idx} className="w-8 h-8 rounded-full border-2 border-neutral-900 bg-neutral-800 flex items-center justify-center overflow-hidden" title={item.name}>
-                            {item.beforeImage ? (
-                              <img src={item.beforeImage || undefined} className="w-full h-full object-cover" alt="" />
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-bold">{item.name[0]}</span>
-                            )}
+                      <div className="flex flex-col gap-1">
+                        {order.items?.slice(0, 2).map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-sm text-slate-300">
+                            <span className="w-4 h-4 rounded-full bg-neutral-800 flex items-center justify-center text-[10px] text-slate-500 font-bold border border-neutral-700">
+                              {item.quantity || 1}
+                            </span>
+                            <span>{item.name}</span>
                           </div>
                         ))}
-                        {(order.items || []).length > 4 && (
-                          <div className="w-8 h-8 rounded-full border-2 border-neutral-900 bg-neutral-800 flex items-center justify-center text-[10px] text-slate-400 font-bold">
-                            +{(order.items || []).length - 4}
+                        {(order.items?.length || 0) > 2 && (
+                          <div className="text-xs text-slate-500 pl-6">
+                            +{order.items!.length - 2} sản phẩm khác...
                           </div>
                         )}
                       </div>
                     </td>
+
+                    {assignedMemberId && (
+                      <td className="p-4 text-right">
+                        <div className="font-bold text-emerald-400">
+                          {formatPrice(orderCommission)} ₫
+                        </div>
+                      </td>
+                    )}
+
                     <td className="p-4 text-right font-bold text-gold-400">{formatPrice(order.totalAmount)} ₫</td>
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getStatusColor(order.status)}`}>

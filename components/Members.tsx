@@ -1,5 +1,6 @@
 import { Briefcase, Building2, Edit, Eye, Mail, MoreHorizontal, Phone, Plus, Search, Trash2, UserCheck, Users, UserX, X } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../context';
 import { Member } from '../types';
 
@@ -192,6 +193,7 @@ const getDepartment = (role: Member['role']): string => {
 
 export const Members: React.FC = () => {
   const { members, updateMember, deleteMember, addMember, orders } = useAppStore();
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Off'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -199,6 +201,10 @@ export const Members: React.FC = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [viewingMember, setViewingMember] = useState<Member | null>(null);
+
+  // Date filter for commission calculation
+  const [commissionDateFrom, setCommissionDateFrom] = useState<string>('');
+  const [commissionDateTo, setCommissionDateTo] = useState<string>('');
 
   // Helper function to format price
   const formatPrice = (price: number) => {
@@ -320,12 +326,30 @@ export const Members: React.FC = () => {
     const memberId = viewingMember.id;
 
     // Find orders where this member is assigned or has commission
-    const memberOrders = orders.filter(order =>
+    let memberOrders = orders.filter(order =>
       order.items?.some(item =>
         item.assignedMembers?.includes(memberId) ||
         (item.commissions && item.commissions[memberId])
       )
     );
+
+    // Apply date filter
+    if (commissionDateFrom) {
+      const fromDate = new Date(commissionDateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      memberOrders = memberOrders.filter(order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate >= fromDate;
+      });
+    }
+    if (commissionDateTo) {
+      const toDate = new Date(commissionDateTo);
+      toDate.setHours(23, 59, 59, 999);
+      memberOrders = memberOrders.filter(order => {
+        const orderDate = new Date(order.createdAt);
+        return orderDate <= toDate;
+      });
+    }
 
     // Calculate commission per order
     const ordersWithCommission = memberOrders.map(order => {
@@ -353,7 +377,7 @@ export const Members: React.FC = () => {
     const totalCommission = ordersWithCommission.reduce((sum, o) => sum + o.memberCommission, 0);
 
     return { orders: ordersWithCommission, totalCommission };
-  }, [viewingMember, orders]);
+  }, [viewingMember, orders, commissionDateFrom, commissionDateTo]);
 
   const handleAddMember = async () => {
     if (!newMember.name || !newMember.phone) {
@@ -488,6 +512,42 @@ export const Members: React.FC = () => {
               >
                 <X size={20} />
               </button>
+            </div>
+
+            {/* Date Filter */}
+            <div className="px-6 py-3 bg-neutral-800/50 border-b border-neutral-800 shrink-0">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="text-sm text-slate-400">Lọc theo ngày:</span>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">Từ</label>
+                  <input
+                    type="date"
+                    value={commissionDateFrom}
+                    onChange={(e) => setCommissionDateFrom(e.target.value)}
+                    className="px-3 py-1.5 bg-neutral-700 border border-neutral-600 rounded-lg text-sm text-slate-200 focus:ring-1 focus:ring-gold-500 outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-500">Đến</label>
+                  <input
+                    type="date"
+                    value={commissionDateTo}
+                    onChange={(e) => setCommissionDateTo(e.target.value)}
+                    className="px-3 py-1.5 bg-neutral-700 border border-neutral-600 rounded-lg text-sm text-slate-200 focus:ring-1 focus:ring-gold-500 outline-none"
+                  />
+                </div>
+                {(commissionDateFrom || commissionDateTo) && (
+                  <button
+                    onClick={() => {
+                      setCommissionDateFrom('');
+                      setCommissionDateTo('');
+                    }}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-neutral-700 rounded-lg transition-colors"
+                  >
+                    Xóa bộ lọc
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Commission Summary Card */}
@@ -1025,8 +1085,8 @@ export const Members: React.FC = () => {
                       <ActionMenu
                         itemName={member.name}
                         onView={() => {
-                          setViewingMember(member);
-                          setShowViewModal(true);
+                          // Navigate to Orders page with member filter
+                          navigate(`/orders?assignedMemberId=${member.id}&memberName=${encodeURIComponent(member.name)}`);
                         }}
                         onEdit={() => {
                           setEditingMember({ ...member });
