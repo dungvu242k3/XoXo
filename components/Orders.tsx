@@ -1496,7 +1496,6 @@ export const Orders: React.FC = () => {
       setNewOrderSurchargeReason('');
       setSelectedItemsForMultiAdd(new Set());
     } catch (error: any) {
-      console.error('Lỗi khi tạo đơn hàng:', error);
       alert('Lỗi khi tạo đơn hàng: ' + (error?.message || String(error)));
     } finally {
       setIsCreatingOrder(false);

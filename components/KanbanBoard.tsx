@@ -1054,12 +1054,6 @@ export const KanbanBoard: React.FC = () => {
   // Get columns from active workflow
   const columns = useMemo(() => {
     if (activeWorkflow === 'ALL') {
-      console.log('🔍 Creating columns for ALL mode:', {
-        selectedOrderIdsSize: selectedOrderIds.size,
-        ordersCount: orders?.length || 0,
-        servicesCount: services?.length || 0,
-        workflowsCount: workflows?.length || 0
-      });
 
       // If orders are selected, only show ALL workflows from services of items in those orders
       // If no orders selected, don't show any workflows
@@ -1071,23 +1065,8 @@ export const KanbanBoard: React.FC = () => {
       // Get workflows from all selected orders
       const selectedOrders = (orders || []).filter(o => o && selectedOrderIds.has(o.id));
       if (selectedOrders.length === 0) {
-        console.log('⚠️ Selected orders not found in orders array');
         return [];
       }
-
-      console.log('📋 Processing selected orders:', {
-        selectedOrdersCount: selectedOrders.length,
-        orders: selectedOrders.map(o => ({
-          id: o.id,
-          itemsCount: o.items?.length || 0,
-          items: o.items?.filter(i => !i.isProduct).map(i => ({
-            id: i.id,
-            name: i.name,
-            serviceId: i.serviceId,
-            workflowId: i.workflowId
-          })) || []
-        }))
-      });
 
       const orderWorkflowIds = new Set<string>();
       const workflowOrderMap = new Map<string, number>();
@@ -1141,11 +1120,6 @@ export const KanbanBoard: React.FC = () => {
                           workflowOrderMap.set(workflowExists.id, index);
                         }
                         workflowsFromServices++;
-                        console.log('✅ Added workflow from service:', {
-                          workflowId: workflowExists.id,
-                          workflowLabel: workflowExists.label,
-                          fromService: service.name
-                        });
                       } else {
                         console.warn('⚠️ Workflow not found:', {
                           serviceWorkflowId: wf.id,
@@ -1175,11 +1149,6 @@ export const KanbanBoard: React.FC = () => {
                 if (workflowExists) {
                   orderWorkflowIds.add(workflowExists.id);
                   workflowsFromItems++;
-                  console.log('✅ Added workflow from item.workflowId:', {
-                    itemId: item.id,
-                    workflowId: workflowExists.id,
-                    workflowLabel: workflowExists.label
-                  });
                 } else {
                   console.warn('⚠️ Workflow from item.workflowId not found:', {
                     itemId: item.id,
@@ -1351,12 +1320,6 @@ export const KanbanBoard: React.FC = () => {
           }
         });
 
-        console.log('🔍 Sequential check:', {
-          draggedService: draggedItem.serviceId,
-          allServices: serviceIds,
-          totalItems: orderItems.length
-        });
-
         // Current item's service index
         const currentServiceIndex = serviceIds.indexOf(draggedItem.serviceId);
 
@@ -1372,19 +1335,7 @@ export const KanbanBoard: React.FC = () => {
               const isDone = ['done', 'cancel', 'delivered', 'hoan_thanh', 'da_giao', 'huy'].includes(status) ||
                 (workflows || []).some(w => w.id === item.workflowId && w.stages?.find(s => s.id === item.status)?.name === 'Done');
 
-              console.log('  - Item check:', {
-                itemName: item.name,
-                status: item.status,
-                isDone
-              });
-
               return isDone;
-            });
-
-            console.log('📊 Previous service check:', {
-              serviceId: prevServiceId,
-              itemsCount: prevItems.length,
-              isCompleted: isPrevCompleted
             });
 
             if (!isPrevCompleted) {
@@ -1398,6 +1349,7 @@ export const KanbanBoard: React.FC = () => {
         }
       }
     }
+
     // ---------------------------------------
 
     if (draggedItem.status === statusId) {

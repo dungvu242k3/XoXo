@@ -388,7 +388,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadWorkflows = async () => {
     try {
-      console.log('🔄 Starting to load workflows from:', DB_TABLES.WORKFLOWS);
       // Select workflows and join with stages
       const { data, error } = await supabase
         .from(DB_TABLES.WORKFLOWS)
@@ -411,19 +410,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return;
       }
 
-      console.log('📦 Raw workflows data from DB:', {
-        count: data?.length || 0,
-        sample: data?.[0] ? {
-          id: data[0].id,
-          ten_quy_trinh: data[0].ten_quy_trinh,
-          id_quy_trinh: data[0].id_quy_trinh,
-          phong_ban_phu_trinh: data[0].phong_ban_phu_trinh,
-          mo_ta: data[0].mo_ta,
-          stages_count: data[0].cac_buoc_quy_trinh?.length || 0,
-          allKeys: Object.keys(data[0])
-        } : null,
-        allData: data
-      });
 
       // Convert workflow data with stages
       const list = (data || []).map((vnItem: any): WorkflowDefinition => {
@@ -454,15 +440,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       setWorkflows(list);
-      console.log('✅ Workflows loaded and mapped:', {
-        count: list.length,
-        workflows: list.map(w => ({
-          id: w.id,
-          label: w.label,
-          stages: w.stages?.length || 0,
-          stageNames: w.stages?.map(s => s.name) || []
-        }))
-      });
+
     } catch (error) {
       console.error('❌ Error loading workflows (catch):', error);
       setWorkflows([]);
@@ -470,10 +448,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const loadOrders = async () => {
-    console.log('🔄 Starting to load orders...');
     try {
       // Load orders - only select columns that exist in database
-      console.log('📡 Querying orders from:', DB_TABLES.ORDERS);
       const ordersResult = await supabase
         .from(DB_TABLES.ORDERS)
         .select('id, id_khach_hang, ten_khach_hang, tong_tien, tien_coc, trang_thai, ngay_du_kien_giao, ghi_chu, ngay_tao, giam_gia, phi_phat_sinh, loai_giam_gia, ly_do_phu_phi')
@@ -493,17 +469,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return; // Don't throw, just return empty
       }
 
-      console.log('📦 Orders data loaded from database:', {
-        count: ordersResult.data?.length || 0,
-        isNull: ordersResult.data === null,
-        isUndefined: ordersResult.data === undefined,
-        isArray: Array.isArray(ordersResult.data),
-        orders: ordersResult.data ? (ordersResult.data || []).slice(0, 3).map(o => ({
-          id: o.id,
-          customerName: o.ten_khach_hang,
-          status: o.trang_thai
-        })) : []
-      });
 
       // Load items separately - only select columns that exist
       const itemsResult = await supabase
@@ -517,7 +482,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       // Load services to link serviceId → workflowId
-      console.log('🔗 Loading services to link workflows...');
       const { data: servicesData, error: servicesError } = await supabase
         .from(DB_TABLES.SERVICES)
         .select('id, id_quy_trinh, cac_buoc_quy_trinh')
@@ -565,15 +529,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             serviceWorkflowMap.set(serviceId, workflowId);
           }
         });
-
-        console.log('✅ Service → Workflow map created:', {
-          servicesCount: servicesData.length,
-          mappedCount: serviceWorkflowMap.size,
-          mappings: Array.from(serviceWorkflowMap.entries()).slice(0, 5).map(([serviceId, workflowId]) => ({
-            serviceId,
-            workflowId
-          }))
-        });
       }
 
       // Link serviceId → workflowId for items that don't have workflowId
@@ -586,12 +541,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // If item has serviceId, try to get workflowId from services
         if (item.id_dich_vu_goc && serviceWorkflowMap.has(item.id_dich_vu_goc)) {
           const linkedWorkflowId = serviceWorkflowMap.get(item.id_dich_vu_goc);
-          console.log('🔗 Linked workflow for item:', {
-            itemId: item.id,
-            itemName: item.ten_hang_muc,
-            serviceId: item.id_dich_vu_goc,
-            workflowId: linkedWorkflowId
-          });
           return {
             ...item,
             id_quy_trinh: linkedWorkflowId
@@ -613,18 +562,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       });
 
-      console.log('📦 Loaded orders and items (with workflow linking):', {
-        ordersCount: (ordersResult.data || []).length,
-        itemsCount: (itemsResult.data || []).length,
-        itemsByOrderCount: itemsByOrder.size,
-        sampleOrder: ordersResult.data?.[0] ? {
-          id: ordersResult.data[0].id,
-          customerName: ordersResult.data[0].ten_khach_hang,
-          totalAmount: ordersResult.data[0].tong_tien,
-          itemsCount: itemsByOrder.get(ordersResult.data[0].id)?.length || 0
-        } : null,
-        ordersData: ordersResult.data?.slice(0, 3) // Log first 3 orders for debugging
-      });
 
       // Map orders với items (bao gồm cả orders không có items)
       const ordersList: Order[] = (ordersResult.data || []).map((order: any) => {
@@ -640,25 +577,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }).filter((order): order is Order => order !== null);
 
       console.log('✅ Mapped orders:', {
-        count: ordersList.length,
-        sample: ordersList[0] ? {
-          id: ordersList[0].id,
-          customerName: ordersList[0].customerName,
-          itemsCount: ordersList[0].items?.length || 0,
-          totalAmount: ordersList[0].totalAmount
-        } : null
+        count: ordersList.length
       });
 
       setOrders(ordersList);
-      console.log('✅ Set orders state. Orders count:', ordersList.length);
 
       if (ordersList.length === 0) {
-        console.warn('⚠️ No orders loaded. Possible reasons:');
-        console.warn('  1. No orders in database');
-        console.warn('  2. RLS (Row Level Security) blocking access');
-        console.warn('  3. Table name mismatch');
-        console.warn('  4. Network/connection error');
+        // No orders logic
       }
+
     } catch (error) {
       console.error('❌ Error loading orders (catch):', {
         error,
@@ -690,38 +617,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadMembers = async () => {
     try {
-      console.log('🔄 Starting to load members from:', DB_TABLES.MEMBERS);
-      const startTime = performance.now();
       const { data, error } = await supabase
         .from(DB_TABLES.MEMBERS)
         .select('id, ho_ten, vai_tro, sdt, email, trang_thai, anh_dai_dien, phong_ban') // Không select mat_khau để bảo mật
         .order('ho_ten', { ascending: true })
-        .limit(100); // Giới hạn để tăng tốc độ
+        .limit(100);
 
       if (error) {
-        console.error('❌ Error loading members:', {
-          error,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-          table: DB_TABLES.MEMBERS
-        });
+        console.error('❌ Error loading members:', error);
         setMembers([]);
         return;
       }
 
-      console.log('📦 Raw members data from DB:', {
-        count: data?.length || 0,
-        sample: data?.[0] || null,
-        allData: data
-      });
-
       const membersList = (data || []).map(mapVietnameseMemberToEnglish);
-      const loadTime = performance.now() - startTime;
-
       setMembers(membersList);
-      console.log(`✅ Members loaded: ${membersList.length} members in ${loadTime.toFixed(2)}ms`);
     } catch (error) {
       console.error('❌ Error loading members (catch):', error);
       setMembers([]);
@@ -730,7 +639,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadProducts = async () => {
     try {
-      const startTime = performance.now();
       const { data, error } = await supabase
         .from(DB_TABLES.PRODUCTS)
         .select('id, ten_san_pham, danh_muc, gia_ban, ton_kho, anh_san_pham, mo_ta')
@@ -744,7 +652,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const productsList = (data || []).map(mapVietnameseProductToEnglish);
-      const loadTime = performance.now() - startTime;
 
       setProducts(productsList);
     } catch (error) {
@@ -755,7 +662,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loadCustomers = async () => {
     try {
-      const startTime = performance.now();
       const { data, error } = await supabase
         .from(DB_TABLES.CUSTOMERS)
         .select('id, ten, sdt, email, dia_chi, hang_thanh_vien, tong_chi_tieu, lan_cuoi_ghe, ghi_chu, nguon_khach, trang_thai, id_nhan_vien_phu_trach, so_lan_tuong_tac, nhom_khach')
@@ -769,7 +675,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const customersList = (data || []).map(mapVietnameseCustomerToEnglish);
-      const loadTime = performance.now() - startTime;
 
       setCustomers(customersList);
     } catch (error) {
@@ -779,14 +684,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   useEffect(() => {
-    console.log('🚀 AppProvider useEffect triggered - starting to load data...');
-    const startTime = performance.now();
-
     // Set loading = false NGAY LẬP TỨC để UI hiển thị (không block UI)
     setIsLoading(false);
 
     // Load TẤT CẢ data song song cùng lúc (không block UI)
-    console.log('🚀 Starting to load all data in parallel...');
     Promise.allSettled([
       loadOrders(),
       loadInventory(),
@@ -1890,6 +1791,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateCustomer = async (customerId: string, updatedCustomer: Customer) => {
     try {
+      // 🚀 OPTIMISTIC UPDATE: Update local state immediately
+      setCustomers(prev => prev.map(c => c.id === customerId ? updatedCustomer : c));
+
       const customerData = {
         ten: updatedCustomer.name,
         sdt: updatedCustomer.phone,
@@ -1911,7 +1815,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .update(customerData)
         .eq('id', customerId);
 
-      if (error) throw error;
+      if (error) {
+        // Rollback if error
+        console.error('Supabase update error, rolling back:', error);
+        setCustomers(prev => prev.map(c => c.id === customerId ? customers.find(old => old.id === customerId)! : c));
+        throw error;
+      }
     } catch (error) {
       console.error('Error updating customer:', error);
       throw error;

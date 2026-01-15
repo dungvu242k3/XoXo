@@ -260,6 +260,55 @@ export const Customers: React.FC = () => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
+  // Drag & Drop State
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+
+  // Column Configuration
+  const COLUMNS = [
+    { id: 'new', label: 'Xác định KH' },
+    { id: 'send_photos', label: 'Hẹn gửi ảnh' },
+    { id: 'quote', label: 'Báo giá' },
+    { id: 'visit_ship', label: 'Hẹn qua / Ship' },
+    { id: 'closing', label: 'Chốt đơn' },
+    { id: 'payment', label: 'Thanh toán' }
+  ];
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, customerId: string) => {
+    setDraggedItemId(customerId);
+    e.dataTransfer.effectAllowed = 'move';
+    // Set transparent image or custom drag image if needed
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetStatus: string) => {
+    e.preventDefault();
+    if (!draggedItemId) return;
+
+    const customer = customers.find(c => c.id === draggedItemId);
+    // Only update if status changed
+    if (customer && (customer.status || 'new') !== targetStatus) {
+      try {
+        await updateCustomer(draggedItemId, { ...customer, status: targetStatus, assigneeId: customer.assigneeId || 'System' });
+      } catch (err: any) {
+        alert('Lỗi cập nhật trạng thái: ' + err.message);
+      }
+    }
+    setDraggedItemId(null);
+  };
+
+  // Helper to get customers for a column
+  const getCustomersByStatus = (statusId: string) => {
+    return filteredCustomers.filter(c => {
+      // Default 'new' for empty status
+      const cStatus = c.status || 'new';
+      return cStatus === statusId;
+    });
+  };
+
   // CSS for Luxury UI
   const luxuryStyles = `
     .luxury-container {
@@ -324,6 +373,7 @@ export const Customers: React.FC = () => {
       display: grid;
       grid-template-columns: 140px repeat(6, 1fr);
       background: linear-gradient(180deg, rgba(255, 255, 255, .01), rgba(255, 255, 255, .00));
+      min-height: 500px; /* Ensure height for drag areas */
     }
 
     .col-header-luxury {
@@ -364,6 +414,11 @@ export const Customers: React.FC = () => {
       border-bottom: 1px solid var(--border);
       min-height: 220px;
       background: radial-gradient(800px 260px at 50% 0%, rgba(212, 175, 55, .05), transparent 60%);
+      transition: background-color 0.2s ease;
+    }
+
+    .cell-luxury.drag-over {
+      background-color: rgba(212, 175, 55, 0.1);
     }
 
     .customer-card-luxury {
@@ -379,11 +434,17 @@ export const Customers: React.FC = () => {
       transition: transform .18s ease, box-shadow .18s ease;
       cursor: pointer;
       margin-bottom: 12px;
+      user-select: none; /* Prevent text selection while dragging */
     }
 
     .customer-card-luxury:hover {
       transform: translateY(-4px);
       box-shadow: 0 18px 45px rgba(0, 0, 0, .55);
+    }
+    
+    .customer-card-luxury:active {
+      transform: scale(0.98);
+      cursor: grabbing;
     }
 
     .customer-card-luxury.is-selected {
@@ -491,12 +552,11 @@ export const Customers: React.FC = () => {
       <div className="flex-1 overflow-auto">
         <div className="workflow-grid-luxury min-w-[1200px]">
           <div className="col-header-luxury">Phân loại</div>
-          <div className="col-header-luxury">Xác định KH ({filteredCustomers.length})</div>
-          <div className="col-header-luxury">Hẹn gửi ảnh (0)</div>
-          <div className="col-header-luxury">Báo giá (0)</div>
-          <div className="col-header-luxury">Hẹn qua / Ship (0)</div>
-          <div className="col-header-luxury">Chốt đơn (0)</div>
-          <div className="col-header-luxury">Thanh toán (0)</div>
+          {COLUMNS.map(col => (
+            <div key={col.id} className="col-header-luxury">
+              {col.label} ({getCustomersByStatus(col.id).length})
+            </div>
+          ))}
 
           <div className="sidebar-luxury">
             {['QT Bán', 'QT Sau bán', 'QT Khen', 'QT Chê', 'QT Bảo hành', 'QT Hỏng đồ'].map(item => (
@@ -504,26 +564,30 @@ export const Customers: React.FC = () => {
             ))}
           </div>
 
-          <div className="cell-luxury">
-            {filteredCustomers.map(customer => (
-              <div
-                key={customer.id}
-                className={`customer-card-luxury ${selectedCustomerId === customer.id ? 'is-selected' : ''}`}
-                onClick={() => setSelectedCustomerId(customer.id)}
-              >
-                <strong>{customer.name}</strong>
-                <div className="text-[10px] mt-1 text-neutral-600">
-                  SĐT: {customer.phone}<br />
-                  Hạng: {customer.tier} | Sale: {customer.assigneeId || 'System'}
+          {COLUMNS.map(col => (
+            <div
+              key={col.id}
+              className="cell-luxury"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, col.id)}
+            >
+              {getCustomersByStatus(col.id).map(customer => (
+                <div
+                  key={customer.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, customer.id)}
+                  className={`customer-card-luxury ${selectedCustomerId === customer.id ? 'is-selected' : ''} ${draggedItemId === customer.id ? 'opacity-50' : ''}`}
+                  onClick={() => setSelectedCustomerId(customer.id)}
+                >
+                  <strong>{customer.name}</strong>
+                  <div className="text-[10px] mt-1 text-neutral-600">
+                    SĐT: {customer.phone}<br />
+                    Hạng: {customer.tier} | Sale: {customer.assigneeId || 'System'}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="cell-luxury"></div>
-          <div className="cell-luxury"></div>
-          <div className="cell-luxury"></div>
-          <div className="cell-luxury"></div>
-          <div className="cell-luxury"></div>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
 
