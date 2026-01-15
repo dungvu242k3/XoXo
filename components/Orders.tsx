@@ -657,6 +657,7 @@ export const Orders: React.FC = () => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [qrPrintTargetId, setQrPrintTargetId] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [printType, setPrintType] = useState<'QR' | 'INVOICE'>('QR');
   const [searchText, setSearchText] = useState('');
   const [filters, setFilters] = useState({
     products: [] as string[],
@@ -1752,7 +1753,9 @@ export const Orders: React.FC = () => {
             <div className="ml-auto flex items-center gap-2 bg-gold-900/20 border border-gold-900/50 px-3 py-1 rounded text-gold-500 text-sm animate-in fade-in">
               <span>Đã chọn {selectedOrderIds.size} đơn</span>
               <div className="h-4 w-px bg-gold-900/50 mx-2"></div>
-              <button onClick={() => setShowQRModal(true)} className="hover:text-gold-400 flex items-center gap-1"><QrCode size={14} /> Print QR</button>
+              <span>Đã chọn {selectedOrderIds.size} đơn</span>
+              <div className="h-4 w-px bg-gold-900/50 mx-2"></div>
+              <button onClick={() => { setPrintType('QR'); setShowQRModal(true); }} className="hover:text-gold-400 flex items-center gap-1"><QrCode size={14} /> Print QR</button>
             </div>
           )}
         </div>
@@ -1831,7 +1834,9 @@ export const Orders: React.FC = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.stopPropagation();
                           setQrPrintTargetId(order.id);
+                          setPrintType('QR');
                           setShowQRModal(true);
                         }}
                         className="p-1.5 text-slate-500 hover:text-gold-500 hover:bg-gold-900/10 rounded transition-colors"
@@ -2031,6 +2036,24 @@ export const Orders: React.FC = () => {
                           <label className="text-xs text-slate-500">Địa chỉ</label>
                           <p className="text-sm text-slate-300">{c?.address || 'Chưa có'}</p>
                         </div>
+                        {selectedOrder.expectedDelivery && (
+                          <div>
+                            <label className="text-xs text-slate-500">Ngày hẹn trả</label>
+                            <p className="font-medium text-gold-500">{formatDate(selectedOrder.expectedDelivery)}</p>
+                          </div>
+                        )}
+                        {selectedOrder.notes && (
+                          <div>
+                            <label className="text-xs text-slate-500">Ghi chú</label>
+                            <p className="text-sm text-slate-300 whitespace-pre-wrap">{selectedOrder.notes}</p>
+                          </div>
+                        )}
+                        {selectedOrder.surchargeReason && (
+                          <div>
+                            <label className="text-xs text-slate-500">Lý do phụ phí</label>
+                            <p className="text-sm text-orange-400">{selectedOrder.surchargeReason}</p>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -2045,12 +2068,18 @@ export const Orders: React.FC = () => {
                         {formatPrice((selectedOrder.items || []).reduce((acc, i) => acc + (i.price * (i.quantity || 1)), 0))} ₫
                       </span>
                     </div>
-                    {(selectedOrder.discount || 0) > 0 && (
-                      <div className="flex justify-between text-emerald-400">
-                        <span>Khấu trừ</span>
-                        <span>-{formatPrice(selectedOrder.discount || 0)} ₫</span>
-                      </div>
-                    )}
+                    {(selectedOrder.discount || 0) > 0 && (() => {
+                      const subtotal = (selectedOrder.items || []).reduce((acc, i) => acc + (i.price * (i.quantity || 1)), 0);
+                      const discountAmount = selectedOrder.discountType === 'percent'
+                        ? (subtotal * (selectedOrder.discount || 0)) / 100
+                        : (selectedOrder.discount || 0);
+                      return (
+                        <div className="flex justify-between text-emerald-400">
+                          <span>Khấu trừ {selectedOrder.discountType === 'percent' ? `(${selectedOrder.discount}%)` : ''}</span>
+                          <span>-{formatPrice(discountAmount)} ₫</span>
+                        </div>
+                      );
+                    })()}
                     {(selectedOrder.additionalFees || 0) > 0 && (
                       <div className="flex justify-between text-blue-400">
                         <span>Phụ phí phát sinh</span>
@@ -2072,7 +2101,16 @@ export const Orders: React.FC = () => {
                   </div>
                 </div>
 
-                <button className="w-full py-3 bg-white text-black rounded-lg hover:bg-slate-200 flex items-center justify-center gap-2 font-medium">
+                <button
+                  onClick={() => {
+                    if (selectedOrder) {
+                      setQrPrintTargetId(selectedOrder.id);
+                      setPrintType('INVOICE');
+                      setShowQRModal(true);
+                    }
+                  }}
+                  className="w-full py-3 bg-white text-black rounded-lg hover:bg-slate-200 flex items-center justify-center gap-2 font-medium"
+                >
                   <FileText size={18} />
                   In Hóa Đơn
                 </button>
@@ -2145,92 +2183,185 @@ export const Orders: React.FC = () => {
                 {orders.filter(o => qrPrintTargetId ? o.id === qrPrintTargetId : selectedOrderIds.has(o.id)).map(order => (
                   <div key={order.id} className="break-inside-avoid mb-8 pb-8 border-b-2 border-dashed border-slate-300 last:border-0 last:mb-0 last:pb-0">
 
-                    {/* 1. Main Order Ticket (Phiếu Tiếp Nhận) */}
-                    <div className="border-2 border-black rounded-xl overflow-hidden mb-6">
-                      <div className="bg-black text-white p-2.5 text-center uppercase font-bold tracking-widest border-b-2 border-black text-sm">
-                        Phiếu Tiếp Nhận Dịch Vụ / Service Ticket
-                      </div>
-                      <div className="p-6 flex flex-row gap-6">
-                        {/* Left Info */}
-                        <div className="flex-1 space-y-5">
-                          <div>
-                            <div className="text-[10px] font-mono text-slate-500 uppercase mb-1 tracking-wider">Mã Đơn Hàng / Order ID</div>
-                            <div className="text-5xl font-black tracking-tighter tabular-nums">
-                              #{order.id.slice(0, 8).toUpperCase()}
-                            </div>
-                            <div className="text-[9px] font-mono text-slate-400 mt-1">{order.id}</div>
+                    {printType === 'QR' ? (
+                      <>
+                        {/* 1. Main Order Ticket (Phiếu Tiếp Nhận) */}
+                        <div className="border-2 border-black rounded-xl overflow-hidden mb-6">
+                          <div className="bg-black text-white p-2.5 text-center uppercase font-bold tracking-widest border-b-2 border-black text-sm">
+                            Phiếu Tiếp Nhận Dịch Vụ / Service Ticket
                           </div>
-
-                          <div className="space-y-1">
-                            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Khách Hàng / Customer</div>
-                            <div className="text-2xl font-bold line-clamp-1">{order.customerName}</div>
-                            {getCustomerInfo(order.customerId) && (
-                              <div className="text-sm font-medium text-slate-600">{getCustomerInfo(order.customerId)?.phone}</div>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200">
-                            <div>
-                              <div className="text-[10px] font-mono text-slate-500 uppercase mb-0.5">Ngày nhận (Received)</div>
-                              <div className="font-bold text-lg">{formatDate(order.createdAt)}</div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] font-mono text-slate-500 uppercase mb-0.5">Hẹn trả (Expected)</div>
-                              <div className="font-bold text-lg">{formatDate(order.expectedDelivery)}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Right QR */}
-                        <div className="flex flex-col items-center justify-center pl-6 border-l border-slate-200 w-48 shrink-0">
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${order.id}`}
-                            alt="Order QR"
-                            className="w-40 h-40 mix-blend-multiply"
-                          />
-                          <div className="text-center mt-2 space-y-1">
-                            <div className="text-[10px] text-slate-500 font-medium">Quét để xem chi tiết</div>
-                            <div className="font-bold text-xs bg-slate-100 px-2 py-1 rounded">{order.items.length} Sản phẩm</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 2. Item Tags (Tem Sản Phẩm) */}
-                    {order.items.length > 0 && (
-                      <div>
-                        <div className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Tem Sản Phẩm ({order.items.length})</div>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-                          {order.items.map((item, idx) => (
-                            <div key={item.id} className="border border-slate-300 rounded-lg p-3 flex gap-3 bg-slate-50/50 relative overflow-hidden break-inside-avoid">
-                              <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-slate-200 rounded-bl text-[9px] font-mono font-bold text-slate-500">
-                                {idx + 1}/{order.items.length}
-                              </div>
-
-                              <img
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${item.id}`}
-                                alt="Item QR"
-                                className="w-16 h-16 mix-blend-multiply bg-white p-1 rounded border border-slate-200 shrink-0 self-center"
-                              />
-
-                              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                <div className="text-[10px] font-mono text-slate-500 mb-0.5 font-bold">
+                          <div className="p-6 flex flex-row gap-6">
+                            {/* Left Info */}
+                            <div className="flex-1 space-y-5">
+                              <div>
+                                <div className="text-[10px] font-mono text-slate-500 uppercase mb-1 tracking-wider">Mã Đơn Hàng / Order ID</div>
+                                <div className="text-5xl font-black tracking-tighter tabular-nums">
                                   #{order.id.slice(0, 8).toUpperCase()}
                                 </div>
-                                <div className="font-bold text-base leading-tight mb-1 line-clamp-2 pr-4">{item.name}</div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded font-medium text-slate-600">
-                                    {item.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'}
-                                  </span>
-                                  {item.id && (
-                                    <span className="text-[9px] font-mono text-slate-400 truncate max-w-[80px]">
-                                      {item.id.split('-')[0]}
-                                    </span>
-                                  )}
+                                <div className="text-[9px] font-mono text-slate-400 mt-1">{order.id}</div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Khách Hàng / Customer</div>
+                                <div className="text-2xl font-bold line-clamp-1">{order.customerName}</div>
+                                {getCustomerInfo(order.customerId) && (
+                                  <div className="text-sm font-medium text-slate-600">{getCustomerInfo(order.customerId)?.phone}</div>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200">
+                                <div>
+                                  <div className="text-[10px] font-mono text-slate-500 uppercase mb-0.5">Ngày nhận (Received)</div>
+                                  <div className="font-bold text-lg">{formatDate(order.createdAt)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] font-mono text-slate-500 uppercase mb-0.5">Hẹn trả (Expected)</div>
+                                  <div className="font-bold text-lg">{formatDate(order.expectedDelivery)}</div>
                                 </div>
                               </div>
                             </div>
-                          ))}
+
+                            {/* Right QR */}
+                            <div className="flex flex-col items-center justify-center pl-6 border-l border-slate-200 w-48 shrink-0">
+                              <img
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${order.id}`}
+                                alt="Order QR"
+                                className="w-40 h-40 mix-blend-multiply"
+                              />
+                              <div className="text-center mt-2 space-y-1">
+                                <div className="text-[10px] text-slate-500 font-medium">Quét để xem chi tiết</div>
+                                <div className="font-bold text-xs bg-slate-100 px-2 py-1 rounded">{order.items.length} Sản phẩm</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. Item Tags (Tem Sản Phẩm) */}
+                        {order.items.length > 0 && (
+                          <div>
+                            <div className="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Tem Sản Phẩm ({order.items.length})</div>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                              {order.items.map((item, idx) => (
+                                <div key={item.id} className="border border-slate-300 rounded-lg p-3 flex gap-3 bg-slate-50/50 relative overflow-hidden break-inside-avoid">
+                                  <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-slate-200 rounded-bl text-[9px] font-mono font-bold text-slate-500">
+                                    {idx + 1}/{order.items.length}
+                                  </div>
+
+                                  <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${item.id}`}
+                                    alt="Item QR"
+                                    className="w-16 h-16 mix-blend-multiply bg-white p-1 rounded border border-slate-200 shrink-0 self-center"
+                                  />
+
+                                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                    <div className="text-[10px] font-mono text-slate-500 mb-0.5 font-bold">
+                                      #{order.id.slice(0, 8).toUpperCase()}
+                                    </div>
+                                    <div className="font-bold text-base leading-tight mb-1 line-clamp-2 pr-4">{item.name}</div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded font-medium text-slate-600">
+                                        {item.type === 'SERVICE' ? 'Dịch vụ' : 'Sản phẩm'}
+                                      </span>
+                                      {item.id && (
+                                        <span className="text-[9px] font-mono text-slate-400 truncate max-w-[80px]">
+                                          {item.id.split('-')[0]}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="p-8">
+                        {/* INVOICE LAYOUT */}
+                        <div className="text-center mb-8">
+                          <h1 className="text-3xl font-black uppercase mb-1 tracking-widest">Hóa Đơn Thanh Toán</h1>
+                          <div className="text-xs font-mono text-slate-500 tracking-widest uppercase">Invoice / Receipt</div>
+                        </div>
+
+                        <div className="flex justify-between mb-8">
+                          <div>
+                            <div className="font-bold text-lg mb-1">{order.customerName}</div>
+                            <div className="text-sm text-slate-500">{getCustomerInfo(order.customerId)?.phone}</div>
+                            <div className="text-sm text-slate-500">{getCustomerInfo(order.customerId)?.address}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-slate-500">Mã đơn: <span className="font-mono font-bold text-black">#{order.id.slice(0, 8).toUpperCase()}</span></div>
+                            <div className="text-sm text-slate-500">Ngày: <span className="font-medium text-black">{formatDate(new Date())}</span></div>
+                          </div>
+                        </div>
+
+                        <table className="w-full text-sm mb-8">
+                          <thead>
+                            <tr className="border-b-2 border-black text-xs font-bold uppercase tracking-wider">
+                              <th className="text-left py-2">Dịch vụ</th>
+                              <th className="text-right py-2 w-16">SL</th>
+                              <th className="text-right py-2 w-32">Đơn giá</th>
+                              <th className="text-right py-2 w-32">Thành tiền</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {order.items.map((item, i) => (
+                              <tr key={i}>
+                                <td className="py-3 font-medium">{item.name}</td>
+                                <td className="py-3 text-right text-slate-600">{item.quantity || 1}</td>
+                                <td className="py-3 text-right text-slate-600">{formatPrice(item.price)}</td>
+                                <td className="py-3 text-right font-bold">{formatPrice(item.price * (item.quantity || 1))}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        <div className="flex justify-end mb-12">
+                          <div className="w-80 space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">Tổng tiền hàng</span>
+                              <span className="font-medium">{formatPrice((order.items || []).reduce((s, x) => s + (x.price * (x.quantity || 1)), 0))} ₫</span>
+                            </div>
+                            {(order.discount || 0) > 0 && (() => {
+                              const subtotal = (order.items || []).reduce((s, x) => s + (x.price * (x.quantity || 1)), 0);
+                              const discountAmount = order.discountType === 'percent'
+                                ? (subtotal * (order.discount || 0)) / 100
+                                : (order.discount || 0);
+                              return (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-slate-500">Giảm giá {order.discountType === 'percent' ? `(${order.discount}%)` : ''}</span>
+                                  <span className="font-medium">-{formatPrice(discountAmount)} ₫</span>
+                                </div>
+                              );
+                            })()}
+                            {(order.additionalFees || 0) > 0 && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Phụ phí</span>
+                                <span className="font-medium">+{formatPrice(order.additionalFees)} ₫</span>
+                              </div>
+                            )}
+                            <div className="border-t border-black pt-2 flex justify-between font-bold text-lg items-center">
+                              <span>TỔNG THANH TOÁN</span>
+                              <span className="whitespace-nowrap">{formatPrice(order.totalAmount)} ₫</span>
+                            </div>
+                            <div className="flex justify-between text-sm pt-1">
+                              <span className="text-slate-500">Đã thanh toán (Cọc)</span>
+                              <span className="font-medium">{formatPrice(order.deposit || 0)} ₫</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold pt-1">
+                              <span className="text-slate-900">CÒN LẠI</span>
+                              <span className="text-red-600">{formatPrice(order.totalAmount - (order.deposit || 0))} ₫</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-center space-y-2">
+                          <p className="text-sm font-medium italic">Cảm ơn quý khách đã sử dụng dịch vụ!</p>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${order.id}`}
+                            alt="QR"
+                            className="w-16 h-16 mx-auto mix-blend-multiply opacity-50"
+                          />
                         </div>
                       </div>
                     )}
@@ -3678,7 +3809,7 @@ export const Orders: React.FC = () => {
                         )}
                         <div className="flex justify-between font-bold text-red-500 pt-1 text-sm">
                           <span>Còn lại:</span>
-                          <span>{formatPrice(calculateOrderTotal(editOrderItems, parseFloat(editOrderDiscount) || 0, editOrderDiscountType, parseFloat(editOrderAdditionalFees) || 0) - (parseFloat(editDeposit.replace(/\./g, '')) || 0))} ₫</span>
+                          <span>{formatPrice(calculateOrderTotal(editOrderItems, parseFloat(editOrderDiscount.replace(/\./g, '')) || 0, editOrderDiscountType, parseFloat(editOrderAdditionalFees.replace(/\./g, '')) || 0) - (parseFloat(editDeposit.replace(/\./g, '')) || 0))} ₫</span>
                         </div>
                       </div>
                     </div>
