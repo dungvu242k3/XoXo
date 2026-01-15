@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowDownUp, Edit, Eye, Image as ImageIcon, MoreHorizontal, Package, Plus, Search, Trash2 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../context';
+import { SearchableSelect } from './SearchableSelect';
 import { FilterState, TableFilter, filterByDateRange } from './TableFilter';
 
 // Action Menu Component
@@ -78,6 +79,24 @@ const ActionMenu: React.FC<{
   );
 };
 
+// Utility for formatting numbers with thousand separators for input
+const formatNumberInput = (value: string): string => {
+  const cleanValue = value.replace(/\D/g, '');
+  if (cleanValue.length === 0) return '';
+  // Remove leading zeros if not just "0"
+  let formatted = cleanValue;
+  if (formatted.length > 1 && formatted.startsWith('0')) {
+    formatted = formatted.replace(/^0+/, '');
+  }
+  return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+// Utility to parse formatted number back to integer/float
+const parseNumber = (value: string): number => {
+  if (!value) return 0;
+  return parseFloat(value.replace(/\./g, '')) || 0;
+};
+
 // Helper function to generate SKU automatically
 const generateSKU = (): string => {
   const now = new Date();
@@ -106,6 +125,24 @@ export const Inventory: React.FC = () => {
     supplier: '',
     image: ''
   });
+
+  // Extract unique units for suggestions
+  const unitOptions = useMemo(() => {
+    const units = new Set<string>();
+    inventory.forEach(item => {
+      if (item.unit) units.add(item.unit);
+    });
+    return Array.from(units).sort();
+  }, [inventory]);
+
+  // Extract unique categories for suggestions
+  const categoryOptions = useMemo(() => {
+    const categories = new Set<string>(['Hoá chất', 'Phụ kiện', 'Dụng cụ', 'Vật tư tiêu hao']);
+    inventory.forEach(item => {
+      if (item.category) categories.add(item.category);
+    });
+    return Array.from(categories).sort();
+  }, [inventory]);
 
   // Lọc dữ liệu theo thời gian và tìm kiếm
   const filteredInventory = useMemo(() => {
@@ -138,10 +175,10 @@ export const Inventory: React.FC = () => {
         sku: finalSKU.toUpperCase(),
         name: newItem.name,
         category: newItem.category,
-        quantity: parseFloat(newItem.quantity),
+        quantity: parseNumber(newItem.quantity),
         unit: newItem.unit,
-        minThreshold: parseFloat(newItem.minThreshold) || 0,
-        importPrice: parseInt(newItem.importPrice),
+        minThreshold: parseNumber(newItem.minThreshold) || 0,
+        importPrice: parseNumber(newItem.importPrice),
         supplier: newItem.supplier || '',
         lastImport: new Date().toLocaleDateString('vi-VN')
       };
@@ -181,9 +218,9 @@ export const Inventory: React.FC = () => {
       const updatedItem: any = {
         ...editingItem,
         sku: editingItem.sku.toUpperCase(),
-        quantity: parseFloat(editingItem.quantity),
-        minThreshold: parseFloat(editingItem.minThreshold) || 0,
-        importPrice: parseInt(editingItem.importPrice)
+        quantity: parseNumber(editingItem.quantity),
+        minThreshold: parseNumber(editingItem.minThreshold) || 0,
+        importPrice: parseNumber(editingItem.importPrice)
       };
 
       // Only add image if it exists and is not empty, otherwise remove it
@@ -260,28 +297,24 @@ export const Inventory: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-2">Danh mục</label>
-                  <select
+                  <SearchableSelect
                     value={newItem.category}
-                    onChange={(e) => setNewItem({ ...newItem, category: e.target.value as typeof newItem.category })}
-                    className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all"
-                  >
-                    <option value="Hoá chất">Hoá chất</option>
-                    <option value="Phụ kiện">Phụ kiện</option>
-                    <option value="Dụng cụ">Dụng cụ</option>
-                    <option value="Vật tư tiêu hao">Vật tư tiêu hao</option>
-                  </select>
+                    onChange={(val) => setNewItem({ ...newItem, category: val as any })}
+                    options={categoryOptions}
+                    placeholder="Chọn hoặc nhập danh mục..."
+                  />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-2">
                     Đơn vị <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <SearchableSelect
                     value={newItem.unit}
-                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+                    onChange={(val) => setNewItem({ ...newItem, unit: val })}
+                    options={unitOptions}
                     placeholder="VD: Hộp, Chai, Cái..."
-                    className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
+                    required
                   />
                 </div>
               </div>
@@ -292,9 +325,9 @@ export const Inventory: React.FC = () => {
                     Số lượng <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={newItem.quantity}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: formatNumberInput(e.target.value) })}
                     placeholder="15"
                     className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
                   />
@@ -305,9 +338,9 @@ export const Inventory: React.FC = () => {
                     Ngưỡng tối thiểu
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={newItem.minThreshold}
-                    onChange={(e) => setNewItem({ ...newItem, minThreshold: e.target.value })}
+                    onChange={(e) => setNewItem({ ...newItem, minThreshold: formatNumberInput(e.target.value) })}
                     placeholder="5"
                     className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
                   />
@@ -318,10 +351,10 @@ export const Inventory: React.FC = () => {
                     Giá nhập (₫) <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={newItem.importPrice}
-                    onChange={(e) => setNewItem({ ...newItem, importPrice: e.target.value })}
-                    placeholder="350000"
+                    onChange={(e) => setNewItem({ ...newItem, importPrice: formatNumberInput(e.target.value) })}
+                    placeholder="350.000"
                     className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
                   />
                 </div>
@@ -439,28 +472,24 @@ export const Inventory: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-2">Danh mục</label>
-                  <select
+                  <SearchableSelect
                     value={editingItem.category}
-                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value as typeof editingItem.category })}
-                    className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all"
-                  >
-                    <option value="Hoá chất">Hoá chất</option>
-                    <option value="Phụ kiện">Phụ kiện</option>
-                    <option value="Dụng cụ">Dụng cụ</option>
-                    <option value="Vật tư tiêu hao">Vật tư tiêu hao</option>
-                  </select>
+                    onChange={(val) => setEditingItem({ ...editingItem, category: val as any })}
+                    options={categoryOptions}
+                    placeholder="Chọn hoặc nhập danh mục..."
+                  />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-400 mb-2">
                     Đơn vị <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <SearchableSelect
                     value={editingItem.unit}
-                    onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
+                    onChange={(val) => setEditingItem({ ...editingItem, unit: val })}
+                    options={unitOptions}
                     placeholder="VD: Hộp, Chai, Cái..."
-                    className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
+                    required
                   />
                 </div>
               </div>
@@ -471,9 +500,9 @@ export const Inventory: React.FC = () => {
                     Số lượng <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={editingItem.quantity}
-                    onChange={(e) => setEditingItem({ ...editingItem, quantity: e.target.value })}
+                    onChange={(e) => setEditingItem({ ...editingItem, quantity: formatNumberInput(e.target.value) })}
                     placeholder="15"
                     className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
                   />
@@ -484,9 +513,9 @@ export const Inventory: React.FC = () => {
                     Ngưỡng tối thiểu
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={editingItem.minThreshold}
-                    onChange={(e) => setEditingItem({ ...editingItem, minThreshold: e.target.value })}
+                    onChange={(e) => setEditingItem({ ...editingItem, minThreshold: formatNumberInput(e.target.value) })}
                     placeholder="5"
                     className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
                   />
@@ -497,10 +526,10 @@ export const Inventory: React.FC = () => {
                     Giá nhập (₫) <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={editingItem.importPrice}
-                    onChange={(e) => setEditingItem({ ...editingItem, importPrice: e.target.value })}
-                    placeholder="350000"
+                    onChange={(e) => setEditingItem({ ...editingItem, importPrice: formatNumberInput(e.target.value) })}
+                    placeholder="350.000"
                     className="w-full px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-slate-200 focus:ring-2 focus:ring-gold-500 outline-none transition-all placeholder-slate-600"
                   />
                 </div>
@@ -704,10 +733,10 @@ export const Inventory: React.FC = () => {
                           sku: item.sku,
                           name: item.name,
                           category: item.category,
-                          quantity: item.quantity.toString(),
+                          quantity: formatNumberInput(item.quantity.toString()),
                           unit: item.unit,
-                          minThreshold: item.minThreshold.toString(),
-                          importPrice: item.importPrice.toString(),
+                          minThreshold: formatNumberInput(item.minThreshold.toString()),
+                          importPrice: formatNumberInput(item.importPrice.toString()),
                           supplier: item.supplier || '',
                           image: item.image || '',
                           lastImport: item.lastImport || ''

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HashRouter, Link, Route, Routes, useLocation } from 'react-router-dom';
+import { CustomerList } from './components/CustomerList';
 import { Customers } from './components/Customers';
 import { Dashboard } from './components/Dashboard';
 import { Inventory } from './components/Inventory';
@@ -87,6 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout, currentUser }) => (
       <SidebarItem to="/products" icon={Tag} label="Sản phẩm bán" />
       <SidebarItem to="/inventory" icon={Package} label="Kho vật tư" />
       <SidebarItem to="/members" icon={Briefcase} label="Nhân sự" />
+      <SidebarItem to="/customer-list" icon={Users} label="Khách hàng" />
 
       <div className="text-xs font-semibold text-slate-600 uppercase tracking-wider px-4 mb-2 mt-6">Kỹ Thuật</div>
       <SidebarItem to="/workflows" icon={GitMerge} label="Quy trình xử lý" />
@@ -440,6 +442,7 @@ const AppContent: React.FC = () => {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/customer-list" element={<CustomerList />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/kanban" element={<KanbanBoard />} />
             <Route path="/inventory" element={<Inventory />} />

@@ -4,6 +4,7 @@ import { MOCK_MEMBERS } from '../constants';
 import { useAppStore } from '../context';
 import { DB_TABLES, supabase } from '../supabase';
 import { InventoryItem, Member, TodoStep, WorkflowDefinition, WorkflowMaterial, WorkflowStage } from '../types';
+import { SearchableSelect } from './SearchableSelect';
 
 // Action Menu Component
 const ActionMenu: React.FC<{
@@ -1186,18 +1187,16 @@ const CreateWorkflowModal: React.FC<{ onClose: () => void; onSuccess?: () => Pro
                            <div className="grid grid-cols-1 gap-3 mb-3">
                               <div>
                                  <label className="text-xs font-medium text-slate-500 mb-1 block">Chọn vật tư trong kho</label>
-                                 <select
-                                    className="w-full p-2 border border-neutral-700 rounded text-sm outline-none focus:border-gold-500 bg-neutral-900 text-slate-200"
+                                 <SearchableSelect
                                     value={selectedInventoryId}
-                                    onChange={(e) => setSelectedInventoryId(e.target.value)}
-                                 >
-                                    <option value="">-- Chọn vật tư --</option>
-                                    {(inventory || []).map(item => (
-                                       <option key={item.id} value={item.id}>
-                                          {item.name} (Tồn: {item.quantity.toLocaleString('vi-VN')} {item.unit})
-                                       </option>
-                                    ))}
-                                 </select>
+                                    onChange={setSelectedInventoryId}
+                                    options={(inventory || []).map(item => ({
+                                       label: `${item.name} (Tồn: ${item.quantity.toLocaleString('vi-VN')} ${item.unit})`,
+                                       value: item.id
+                                    }))}
+                                    placeholder="Tìm theo tên hoặc mã..."
+                                    allowNew={false}
+                                 />
                               </div>
                               <div>
                                  <label className="text-xs font-medium text-slate-500 mb-1 block">Định mức / SP</label>
