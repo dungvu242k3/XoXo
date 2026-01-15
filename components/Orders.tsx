@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Circle, Columns, Download, Edit, Eye, FileText, Image as ImageIcon, MoreHorizontal, Package, Plus, Printer, QrCode, Search, ShoppingBag, Square, Trash2, Upload, Users, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CheckSquare, ChevronDown, ChevronRight, Circle, Columns, Download, Edit, Eye, FileText, Image as ImageIcon, Loader2, MoreHorizontal, Package, Plus, Printer, QrCode, Search, ShoppingBag, Square, Trash2, Upload, Users, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
@@ -1416,82 +1416,108 @@ export const Orders: React.FC = () => {
     return Math.max(0, total); // Ensure total is not negative
   };
 
-  const handleCreateOrder = () => {
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+
+  const handleCreateOrder = async () => {
     if (!selectedCustomerId || newOrderItems.length === 0) return;
 
-    const customer = customers.find(c => c.id === selectedCustomerId);
-    const discount = parseFloat(newOrderDiscount.replace(/\./g, '')) || 0;
-    const additionalFees = parseFloat(newOrderAdditionalFees.replace(/\./g, '')) || 0;
-    const deposit = parseFloat(newOrderDeposit.replace(/\./g, '')) || 0;
-    const totalAmount = calculateOrderTotal(newOrderItems, discount, newOrderDiscountType, additionalFees);
+    try {
+      setIsCreatingOrder(true);
+      const customer = customers.find(c => c.id === selectedCustomerId);
+      const discount = parseFloat(newOrderDiscount.replace(/\./g, '')) || 0;
+      const additionalFees = parseFloat(newOrderAdditionalFees.replace(/\./g, '')) || 0;
+      const deposit = parseFloat(newOrderDeposit.replace(/\./g, '')) || 0;
+      const totalAmount = calculateOrderTotal(newOrderItems, discount, newOrderDiscountType, additionalFees);
 
-    // Tự động gán technician cho item đầu tiên (không phải product)
-    const firstServiceItem = newOrderItems.find(item => !item.isProduct);
-    let itemsWithAssignment = [...newOrderItems];
+      // Tự động gán technician cho item đầu tiên (không phải product)
+      const firstServiceItem = newOrderItems.find(item => !item.isProduct);
+      let itemsWithAssignment = [...newOrderItems];
 
-    if (firstServiceItem) {
-      // Tìm technician đầu tiên (Kỹ thuật viên) từ members
-      const firstTechnician = members.find(m => m.role === 'Kỹ thuật viên');
+      if (firstServiceItem) {
+        // Tìm technician đầu tiên (Kỹ thuật viên) từ members
+        const firstTechnician = members.find(m => m.role === 'Kỹ thuật viên');
 
-      if (firstTechnician) {
-        const firstItemIndex = itemsWithAssignment.findIndex(item => item.id === firstServiceItem.id);
-        if (firstItemIndex !== -1) {
-          itemsWithAssignment[firstItemIndex] = {
-            ...itemsWithAssignment[firstItemIndex],
-            technicianId: firstTechnician.id
-          };
+        if (firstTechnician) {
+          const firstItemIndex = itemsWithAssignment.findIndex(item => item.id === firstServiceItem.id);
+          if (firstItemIndex !== -1) {
+            itemsWithAssignment[firstItemIndex] = {
+              ...itemsWithAssignment[firstItemIndex],
+              technicianId: firstTechnician.id
+            };
+          }
         }
       }
+
+      // Không tạo ID - để database tự tạo
+      const newOrder: Order = {
+        id: '', // Tạm thời để trống, sẽ được cập nhật sau khi tạo
+        customerId: selectedCustomerId,
+        customerName: customer?.name || 'Khách lẻ',
+        items: itemsWithAssignment.map(item => {
+          // Convert commission percentage to money
+          if (item.commissions) {
+            const commissions: any = {};
+            Object.entries(item.commissions).forEach(([memberId, comm]: [string, any]) => {
+              if (comm.type === 'percent') {
+                commissions[memberId] = {
+                  value: (item.price * (comm.value || 0)) / 100,
+                  type: 'money'
+                };
+              } else {
+                commissions[memberId] = comm;
+              }
+            });
+            return { ...item, commissions };
+          }
+          return item;
+        }), // Không cần tạo ID cho items - database tự tạo
+        totalAmount: totalAmount,
+        deposit: deposit,
+        status: OrderStatus.PENDING,
+        createdAt: new Date().toLocaleDateString('vi-VN'),
+        expectedDelivery: newOrderExpectedDelivery ? new Date(newOrderExpectedDelivery).toLocaleDateString('vi-VN') : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('vi-VN'),
+        notes: '',
+        discount: discount > 0 ? discount : undefined,
+        discountType: newOrderDiscountType,
+        additionalFees: additionalFees > 0 ? additionalFees : undefined,
+        surchargeReason: newOrderSurchargeReason || undefined
+      };
+
+      await addOrder(newOrder);
+
+      setIsModalOpen(false);
+      setNewOrderItems([]);
+      setSelectedCustomerId('');
+      setNewOrderDeposit('');
+      setNewOrderExpectedDelivery(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+      setNewOrderDiscount('');
+      setNewOrderDiscountType('money');
+      setNewOrderAdditionalFees('');
+      setNewOrderSurchargeReason('');
+      setSelectedItemsForMultiAdd(new Set());
+    } catch (error: any) {
+      console.error('Lỗi khi tạo đơn hàng:', error);
+      alert('Lỗi khi tạo đơn hàng: ' + (error?.message || String(error)));
+    } finally {
+      setIsCreatingOrder(false);
     }
-
-    // Không tạo ID - để database tự tạo
-    const newOrder: Order = {
-      id: '', // Tạm thời để trống, sẽ được cập nhật sau khi tạo
-      customerId: selectedCustomerId,
-      customerName: customer?.name || 'Khách lẻ',
-      items: itemsWithAssignment.map(item => {
-        // Convert commission percentage to money
-        if (item.commissions) {
-          const commissions: any = {};
-          Object.entries(item.commissions).forEach(([memberId, comm]: [string, any]) => {
-            if (comm.type === 'percent') {
-              commissions[memberId] = {
-                value: (item.price * (comm.value || 0)) / 100,
-                type: 'money'
-              };
-            } else {
-              commissions[memberId] = comm;
-            }
-          });
-          return { ...item, commissions };
-        }
-        return item;
-      }), // Không cần tạo ID cho items - database tự tạo
-      totalAmount: totalAmount,
-      deposit: deposit,
-      status: OrderStatus.PENDING,
-      createdAt: new Date().toLocaleDateString('vi-VN'),
-      expectedDelivery: newOrderExpectedDelivery ? new Date(newOrderExpectedDelivery).toLocaleDateString('vi-VN') : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('vi-VN'),
-      notes: '',
-      discount: discount > 0 ? discount : undefined,
-      discountType: newOrderDiscountType,
-      additionalFees: additionalFees > 0 ? additionalFees : undefined,
-      surchargeReason: newOrderSurchargeReason || undefined
-    };
-
-    addOrder(newOrder);
-
-    setIsModalOpen(false);
-    setNewOrderItems([]);
-    setSelectedCustomerId('');
-    setNewOrderDeposit('');
-    setNewOrderExpectedDelivery(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    setNewOrderDiscount('');
-    setNewOrderDiscountType('money');
-    setNewOrderAdditionalFees('');
-    setNewOrderSurchargeReason('');
-    setSelectedItemsForMultiAdd(new Set());
   };
+  // ... (rest of the file content)
+
+  <button
+    onClick={handleCreateOrder}
+    disabled={!selectedCustomerId || newOrderItems.length === 0 || isCreatingOrder}
+    className="px-6 py-2.5 bg-gold-600 hover:bg-gold-700 text-black font-medium rounded-lg shadow-lg shadow-gold-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+  >
+    {isCreatingOrder ? (
+      <>
+        <Loader2 size={18} className="animate-spin" />
+        <span>Đang tạo...</span>
+      </>
+    ) : (
+      <span>Tạo Đơn Hàng</span>
+    )}
+  </button>
 
   const handleEditAddItem = () => {
     if (!editSelectedItemId) return;

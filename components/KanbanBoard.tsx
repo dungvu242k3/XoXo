@@ -1669,86 +1669,50 @@ export const KanbanBoard: React.FC = () => {
     const filteredByWorkflow = result.filter(item => item.workflowId === activeWorkflow);
 
     // Apply Sequential Visibility: Hide completed services, only show active + pending
-    const serviceIds: string[] = Array.from(new Set(
-      filteredByWorkflow.map(i => i.serviceId).filter((id): id is string => !!id)
-    ));
+    // GLOBAL CHECK: We must check the sequential status of ALL services for the order, not just the ones in this workflow.
 
-    if (serviceIds.length > 1) {
-      // Find first incomplete service
-      let firstIncompleteIndex = -1;
+    return filteredByWorkflow.filter(item => {
+      // 1. Find all services for this item's order
+      const orderItems = items.filter(i => i.orderId === item.orderId);
+      const serviceIds = Array.from(new Set(orderItems.map(i => i.serviceId).filter((id): id is string => !!id)));
 
-      for (let i = 0; i < serviceIds.length; i++) {
-        const serviceId = serviceIds[i];
-        const serviceItems = filteredByWorkflow.filter(item => item.serviceId === serviceId);
+      if (serviceIds.length <= 1) {
+        // Only one service, standard checks
+        const status = (item.status || '').trim().toLowerCase();
+        const isExplicitDone = ['done', 'cancel', 'delivered', 'hoan_thanh', 'da_giao', 'huy'].includes(status);
+        const isDoneStage = (workflows || []).some(w => w.stages?.some(s => {
+          // ... (existing done check logic) ...
+          const sId = (s.id || '').toLowerCase();
+          return sId === status && ['done', 'hoàn thành', 'completed', 'finish'].some(k => (s.name || '').toLowerCase().includes(k));
+        }));
+        return !isExplicitDone && !isDoneStage;
+      }
 
-        const isCompleted = serviceItems.every(item => {
-          const status = item.status.toLowerCase();
-          return ['done', 'cancel', 'delivered', 'hoan_thanh', 'da_giao', 'huy'].includes(status) ||
-            (workflows || []).some(w => w.stages?.some(s => {
-              const sId = (s.id || '').toLowerCase();
-              const iStatus = (status || '').toLowerCase();
-              const sName = (s.name || '').trim().toLowerCase();
-              return sId === iStatus && ['done', 'hoàn thành', 'hoàn tất', 'đã xong', 'finish', 'finished', 'complete', 'completed'].some(k => sName.includes(k));
-            }));
+      // 2. Find the FIRST incomplete service for this order
+      let firstIncompleteServiceId = null;
+      for (const sId of serviceIds) {
+        const sItems = orderItems.filter(i => i.serviceId === sId);
+        const isCompleted = sItems.every(i => {
+          const status = (i.status || '').toLowerCase();
+          if (['done', 'cancel', 'delivered', 'hoan_thanh', 'da_giao', 'huy'].includes(status)) return true;
+          const wf = workflows.find(w => w.id === i.workflowId);
+          const stage = wf?.stages?.find(s => s.id === i.status);
+          return stage && ['done', 'hoàn thành', 'completed', 'finish'].some(k => (stage.name || '').toLowerCase().includes(k));
         });
 
         if (!isCompleted) {
-          firstIncompleteIndex = i;
+          firstIncompleteServiceId = sId;
           break;
         }
       }
 
-      // Only show the first incomplete service (hide completed ones)
-      if (firstIncompleteIndex !== -1) {
-        let visibleItems = filteredByWorkflow.filter(item => {
-          if (!item.serviceId) return true;
-          const idx = serviceIds.indexOf(item.serviceId);
-          return idx === firstIncompleteIndex; // Only show current active service
-        });
-
-        // Hide items that are explicitly "done" or "cancel" from this view
-        visibleItems = visibleItems.filter(item => {
-          const status = item.status.toLowerCase();
-          const isExplicitDone = ['done', 'cancel', 'delivered', 'hoan_thanh', 'hoan thanh', 'da_giao', 'huy'].includes(status);
-
-          // Also check if status is a UUID for a "Done" stage (Robust Check)
-          const isDoneStage = (workflows || []).some(w =>
-            w.stages?.some(s => {
-              const sId = (s.id || '').toLowerCase();
-              const iStatus = (status || '').toLowerCase();
-              const sName = (s.name || '').trim().toLowerCase();
-              return sId === iStatus && ['done', 'hoàn thành', 'hoàn tất', 'đã xong', 'finish', 'finished', 'complete', 'completed'].some(k => sName.includes(k));
-            })
-          );
-
-          return !isExplicitDone && !isDoneStage;
-        });
-
-        console.log('📋 Sequential filter applied:', {
-          totalServices: serviceIds.length,
-          activeServiceIndex: firstIncompleteIndex,
-          visibleCount: visibleItems.length
-        });
-
-        return visibleItems;
+      // 3. Only show items if they belong to the FIRST incomplete service
+      // (Or if all are complete, none should show in active view anyway, but fallback to last)
+      if (firstIncompleteServiceId) {
+        return item.serviceId === firstIncompleteServiceId;
       }
-    }
 
-    // Hide items that are explicitly "done" or "cancel" from this view (fallback case)
-    return filteredByWorkflow.filter(item => {
-      const status = (item.status || '').trim().toLowerCase();
-      const isExplicitDone = ['done', 'cancel', 'delivered', 'hoan_thanh', 'hoan thanh', 'da_giao', 'huy'].includes(status);
-
-      const isDoneStage = (workflows || []).some(w =>
-        w.stages?.some(s => {
-          const sId = (s.id || '').toLowerCase();
-          const iStatus = (status || '').toLowerCase();
-          const sName = (s.name || '').trim().toLowerCase();
-          return sId === iStatus && ['done', 'hoàn thành', 'hoàn tất', 'đã xong', 'finish', 'finished', 'complete', 'completed'].some(k => sName.includes(k));
-        })
-      );
-
-      return !isExplicitDone && !isDoneStage;
+      return false; // All services complete
     });
   }, [items, activeWorkflow, workflows, Array.from(selectedOrderIds).join(',')]);
 
@@ -2438,192 +2402,214 @@ export const KanbanBoard: React.FC = () => {
                     return (
                       <div key={order.id} className="mb-4 bg-transparent relative flex group border-b border-neutral-800/50 pb-6">
 
-                        {/* LEFT PART: Horizontal List of Item Cards */}
-                        <div className="flex-1 min-w-0 flex overflow-x-auto gap-4 px-2 pb-2" style={{ scrollbarWidth: 'thin' }}>
-                          {processedOrderItems.map((item, idx) => {
-                            const wfId = item.workflowId || 'unknown';
-                            const workflowDef = workflows.find(w => w.id === wfId);
+                        <div className="flex-1 min-w-0 flex overflow-x-auto gap-8 px-2 pb-2" style={{ scrollbarWidth: 'thin' }}>
+                          {(() => {
+                            // 1. Ungrouped: Render items directly for sequential headers
+                            return processedOrderItems.map((item, idx) => {
+                              const wfId = item.workflowId || 'unknown';
+                              const workflowDef = workflows.find(w => w.id === wfId);
+                              const label = workflowDef?.label || (wfId === 'unknown' ? 'Chưa phân loại' : 'Quy trình khác');
 
-                            // Determine stages
-                            let wfStages: WorkflowStage[] = [];
-                            if (workflowDef && workflowDef.stages && workflowDef.stages.length > 0) {
-                              wfStages = [...workflowDef.stages].sort((a, b) => a.order - b.order);
-                            } else {
-                              wfStages = DEFAULT_COLUMNS.map(col => ({
-                                id: mapStatusToStageId(col.id),
-                                name: col.title,
-                                order: 0,
-                                color: col.color
-                              } as WorkflowStage));
-                            }
-
-                            // Find current stage index
-                            const currentStageIndex = wfStages.findIndex(s => s.id === item.status) || 0;
-                            const currentStage = wfStages.find(s => s.id === item.status);
-
-                            // Determine if item is DONE
-                            const isItemDone = ['done', 'cancel', 'delivered', 'hoan_thanh', 'da_giao', 'huy'].includes(item.status.toLowerCase()) ||
-                              currentStage?.name === 'Done';
-
-                            return (
-                              <div
-                                key={`${item.id}-${idx}`}
-                                className={`flex-shrink-0 w-[340px] bg-neutral-900 border rounded-xl p-4 flex flex-col shadow-sm relative hover:border-neutral-700 transition-colors ${isItemDone ? 'border-emerald-500/50 ring-1 ring-emerald-500/20' : 'border-neutral-800'
-                                  }`}
-                              >
-                                {isItemDone && (
-                                  <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg z-20 flex items-center gap-1">
-                                    ✅ DONE
+                              return (
+                                <div key={`${item.id}-${idx}`} className="flex-shrink-0 flex flex-col gap-3 relative">
+                                  {/* Workflow Header - 1-to-1 Mapping for Sequence */}
+                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800/90 rounded-lg border border-neutral-700 w-max sticky left-0 z-10 backdrop-blur-sm shadow-sm">
+                                    <Layers size={14} className="text-gold-500" />
+                                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">{label}</span>
+                                    <span className="bg-neutral-700 text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full font-bold">{idx + 1}</span>
                                   </div>
-                                )}
-                                {/* Card Header: Image + Basic Info */}
-                                <div className="flex gap-3 mb-4">
-                                  <div className="w-16 h-16 bg-neutral-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-neutral-700/50">
-                                    {item.beforeImage ? (
-                                      <img src={item.beforeImage} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      <div className="text-[10px] text-slate-600 font-medium">No Img</div>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                    <h4 className="text-slate-200 font-bold text-sm truncate" title={item.name}>{item.name}</h4>
-                                    <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                                      <User size={12} />
-                                      <span>{order.customerName}</span>
-                                    </div>
-                                  </div>
-                                </div>
 
-                                {/* Workflow Badge */}
-                                <div className="mb-3">
-                                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-900/20 border border-blue-900/30 rounded-lg max-w-full">
-                                    <Layers size={12} className="text-blue-400 flex-shrink-0" />
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="text-[9px] text-blue-300 uppercase font-bold tracking-wider leading-none mb-0.5">QUY TRÌNH</span>
-                                      <span className="text-xs text-blue-100 font-semibold truncate leading-tight">{workflowDef?.label || 'Mặc định'}</span>
-                                    </div>
-                                  </div>
-                                </div>
+                                  <div className="flex gap-4">
+                                    {/* Inner map removed, rendering directly */}
+                                    {(() => {
+                                      const wfId = item.workflowId || 'unknown';
+                                      const workflowDef = workflows.find(w => w.id === wfId);
 
-                                {/* Progress Stepper (Mini) */}
-                                <div className="mb-4">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
-                                      <ListChecks size={12} /> Các bước thực hiện ({wfStages.length})
-                                    </span>
-                                  </div>
-                                  <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                                    {wfStages.map((stage, sIdx) => {
-                                      const isCompleted = sIdx < currentStageIndex;
-                                      const isCurrent = stage.id === item.status;
-
-                                      // Determine assigned members for this stage
-                                      let stageMembers = stage.assignedMembers || [];
-                                      if ((item as any).stageAssignments && Array.isArray((item as any).stageAssignments)) {
-                                        const specificAssignment = (item as any).stageAssignments.find((a: any) => a.stageId === stage.id);
-                                        if (specificAssignment && specificAssignment.assignedMemberIds && specificAssignment.assignedMemberIds.length > 0) {
-                                          stageMembers = specificAssignment.assignedMemberIds;
-                                        }
+                                      // Determine stages
+                                      let wfStages: WorkflowStage[] = [];
+                                      if (workflowDef && workflowDef.stages && workflowDef.stages.length > 0) {
+                                        wfStages = [...workflowDef.stages].sort((a, b) => a.order - b.order);
+                                      } else {
+                                        wfStages = DEFAULT_COLUMNS.map(col => ({
+                                          id: mapStatusToStageId(col.id),
+                                          name: col.title,
+                                          order: 0,
+                                          color: col.color
+                                        } as WorkflowStage));
                                       }
+
+                                      // Find current stage index
+                                      const currentStageIndex = wfStages.findIndex(s => s.id === item.status) || 0;
+                                      const currentStage = wfStages.find(s => s.id === item.status);
+
+                                      // Determine if item is DONE
+                                      const isItemDone = ['done', 'cancel', 'delivered', 'hoan_thanh', 'da_giao', 'huy'].includes(item.status.toLowerCase()) ||
+                                        currentStage?.name === 'Done';
 
                                       return (
                                         <div
-                                          key={stage.id}
-                                          className={`flex-shrink-0 px-2 py-1 rounded text-[10px] whitespace-nowrap border flex flex-col gap-0.5
-                                              ${isCurrent
-                                              ? 'bg-orange-900/20 border-orange-500/50 text-orange-200 font-bold'
-                                              : isCompleted
-                                                ? 'bg-neutral-800 border-neutral-700 text-slate-500'
-                                                : 'bg-neutral-900 border-neutral-800 text-slate-600'
+                                          key={`${item.id}-${idx}`}
+                                          className={`flex-shrink-0 w-[340px] bg-neutral-900 border rounded-xl p-4 flex flex-col shadow-sm relative hover:border-neutral-700 transition-colors ${isItemDone ? 'border-emerald-500/50 ring-1 ring-emerald-500/20' : 'border-neutral-800'
                                             }`}
                                         >
-                                          <div className="flex items-center gap-1">
-                                            <span className="font-mono opacity-50">#{sIdx + 1}</span> {stage.name}
+                                          {isItemDone && (
+                                            <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg z-20 flex items-center gap-1">
+                                              ✅ DONE
+                                            </div>
+                                          )}
+                                          {/* Card Header: Image + Basic Info */}
+                                          <div className="flex gap-3 mb-4">
+                                            <div className="w-16 h-16 bg-neutral-800 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-neutral-700/50">
+                                              {item.beforeImage ? (
+                                                <img src={item.beforeImage} alt="" className="w-full h-full object-cover" />
+                                              ) : (
+                                                <div className="text-[10px] text-slate-600 font-medium">No Img</div>
+                                              )}
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                              <h4 className="text-slate-200 font-bold text-sm truncate" title={item.name}>{item.name}</h4>
+                                              <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                                                <User size={12} />
+                                                <span>{order.customerName}</span>
+                                              </div>
+                                            </div>
                                           </div>
-                                          {stageMembers.length > 0 && (
-                                            <div className="flex -space-x-1 mt-0.5 overflow-hidden">
-                                              {stageMembers.slice(0, 3).map(memberId => {
-                                                const member = members.find(m => m.id === memberId);
-                                                if (!member) return null;
+
+                                          {/* Workflow Badge */}
+                                          <div className="mb-3">
+                                            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-900/20 border border-blue-900/30 rounded-lg max-w-full">
+                                              <Layers size={12} className="text-blue-400 flex-shrink-0" />
+                                              <div className="flex flex-col min-w-0">
+                                                <span className="text-[9px] text-blue-300 uppercase font-bold tracking-wider leading-none mb-0.5">QUY TRÌNH</span>
+                                                <span className="text-xs text-blue-100 font-semibold truncate leading-tight">{workflowDef?.label || 'Mặc định'}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Progress Stepper (Mini) */}
+                                          <div className="mb-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
+                                                <ListChecks size={12} /> Các bước thực hiện ({wfStages.length})
+                                              </span>
+                                            </div>
+                                            <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                                              {wfStages.map((stage, sIdx) => {
+                                                const isCompleted = sIdx < currentStageIndex;
+                                                const isCurrent = stage.id === item.status;
+
+                                                // Determine assigned members for this stage
+                                                let stageMembers = stage.assignedMembers || [];
+                                                if ((item as any).stageAssignments && Array.isArray((item as any).stageAssignments)) {
+                                                  const specificAssignment = (item as any).stageAssignments.find((a: any) => a.stageId === stage.id);
+                                                  if (specificAssignment && specificAssignment.assignedMemberIds && specificAssignment.assignedMemberIds.length > 0) {
+                                                    stageMembers = specificAssignment.assignedMemberIds;
+                                                  }
+                                                }
+
                                                 return (
-                                                  <div key={memberId} className="w-3 h-3 rounded-full border border-neutral-900 bg-neutral-800 flex items-center justify-center overflow-hidden" title={member.name}>
-                                                    {member.avatar ? (
-                                                      <img src={member.avatar} alt="" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                      <span className="text-[6px] text-slate-400 font-bold">{member.name.charAt(0)}</span>
+                                                  <div
+                                                    key={stage.id}
+                                                    className={`flex-shrink-0 px-2 py-1 rounded text-[10px] whitespace-nowrap border flex flex-col gap-0.5
+                                                      ${isCurrent
+                                                        ? 'bg-orange-900/20 border-orange-500/50 text-orange-200 font-bold'
+                                                        : isCompleted
+                                                          ? 'bg-neutral-800 border-neutral-700 text-slate-500'
+                                                          : 'bg-neutral-900 border-neutral-800 text-slate-600'
+                                                      }`}
+                                                  >
+                                                    <div className="flex items-center gap-1">
+                                                      <span className="font-mono opacity-50">#{sIdx + 1}</span> {stage.name}
+                                                    </div>
+                                                    {stageMembers.length > 0 && (
+                                                      <div className="flex -space-x-1 mt-0.5 overflow-hidden">
+                                                        {stageMembers.slice(0, 3).map(memberId => {
+                                                          const member = members.find(m => m.id === memberId);
+                                                          if (!member) return null;
+                                                          return (
+                                                            <div key={memberId} className="w-3 h-3 rounded-full border border-neutral-900 bg-neutral-800 flex items-center justify-center overflow-hidden" title={member.name}>
+                                                              {member.avatar ? (
+                                                                <img src={member.avatar} alt="" className="w-full h-full object-cover" />
+                                                              ) : (
+                                                                <span className="text-[6px] text-slate-400 font-bold">{member.name.charAt(0)}</span>
+                                                              )}
+                                                            </div>
+                                                          );
+                                                        })}
+                                                      </div>
                                                     )}
                                                   </div>
                                                 );
                                               })}
                                             </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                                          </div>
 
-                                {/* Current Status Highlight Box */}
-                                <div className="mt-auto bg-neutral-800/40 border border-neutral-700/40 rounded-lg p-3 relative overflow-hidden">
-                                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500"></div>
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5 ml-2">ĐANG LÀM</div>
-                                      <div className="text-sm text-slate-200 font-bold ml-2 truncate">
-                                        {currentStage?.name || 'Chưa bắt đầu'}
-                                      </div>
-                                    </div>
-
-                                    {/* Staff for active stage in Matrix View */}
-                                    {(() => {
-                                      let currentStageMembers = currentStage?.assignedMembers || [];
-                                      if (currentStage && (item as any).stageAssignments && Array.isArray((item as any).stageAssignments)) {
-                                        const specificAssignment = (item as any).stageAssignments.find((a: any) => a.stageId === currentStage.id);
-                                        if (specificAssignment && specificAssignment.assignedMemberIds && specificAssignment.assignedMemberIds.length > 0) {
-                                          currentStageMembers = specificAssignment.assignedMemberIds;
-                                        }
-                                      }
-
-                                      if (currentStageMembers.length === 0) return null;
-
-                                      return (
-                                        <div className="flex flex-wrap gap-1 justify-end">
-                                          {currentStageMembers.map(memberId => {
-                                            const member = members.find(m => m.id === memberId);
-                                            if (!member) return null;
-                                            return (
-                                              <div key={memberId} className="flex items-center gap-1 bg-neutral-900/60 border border-orange-500/20 px-1.5 py-0.5 rounded-full">
-                                                {member.avatar ? (
-                                                  <img src={member.avatar} alt="" className="w-3 h-3 rounded-full" />
-                                                ) : (
-                                                  <div className="w-2.5 h-2.5 rounded-full bg-neutral-700 flex items-center justify-center text-[6px] font-bold text-slate-300">
-                                                    {member.name.charAt(0)}
-                                                  </div>
-                                                )}
-                                                <span className="text-[9px] text-slate-300 font-medium">{member.name}</span>
+                                          {/* Current Status Highlight Box */}
+                                          <div className="mt-auto bg-neutral-800/40 border border-neutral-700/40 rounded-lg p-3 relative overflow-hidden">
+                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500"></div>
+                                            <div className="flex justify-between items-start">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5 ml-2">ĐANG LÀM</div>
+                                                <div className="text-sm text-slate-200 font-bold ml-2 truncate">
+                                                  {currentStage?.name || 'Chưa bắt đầu'}
+                                                </div>
                                               </div>
-                                            );
-                                          })}
+
+                                              {/* Staff for active stage in Matrix View */}
+                                              {(() => {
+                                                let currentStageMembers = currentStage?.assignedMembers || [];
+                                                if (currentStage && (item as any).stageAssignments && Array.isArray((item as any).stageAssignments)) {
+                                                  const specificAssignment = (item as any).stageAssignments.find((a: any) => a.stageId === currentStage.id);
+                                                  if (specificAssignment && specificAssignment.assignedMemberIds && specificAssignment.assignedMemberIds.length > 0) {
+                                                    currentStageMembers = specificAssignment.assignedMemberIds;
+                                                  }
+                                                }
+
+                                                if (currentStageMembers.length === 0) return null;
+
+                                                return (
+                                                  <div className="flex flex-wrap gap-1 justify-end">
+                                                    {currentStageMembers.map(memberId => {
+                                                      const member = members.find(m => m.id === memberId);
+                                                      if (!member) return null;
+                                                      return (
+                                                        <div key={memberId} className="flex items-center gap-1 bg-neutral-900/60 border border-orange-500/20 px-1.5 py-0.5 rounded-full">
+                                                          {member.avatar ? (
+                                                            <img src={member.avatar} alt="" className="w-3 h-3 rounded-full" />
+                                                          ) : (
+                                                            <div className="w-2.5 h-2.5 rounded-full bg-neutral-700 flex items-center justify-center text-[6px] font-bold text-slate-300">
+                                                              {member.name.charAt(0)}
+                                                            </div>
+                                                          )}
+                                                          <span className="text-[9px] text-slate-300 font-medium">{member.name}</span>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                );
+                                              })()}
+                                            </div>
+                                          </div>
+
+                                          {/* Footer Info */}
+                                          <div className="mt-4 flex items-center justify-between pt-3 border-t border-neutral-800/50 text-xs">
+                                            <div className="flex items-center gap-1.5 text-slate-400 bg-neutral-800/50 px-2 py-1 rounded">
+                                              <Calendar size={12} />
+                                              <span>{formatDate(order.expectedDelivery)}</span>
+                                            </div>
+                                            <div className="font-mono font-bold text-gold-400 text-sm">
+                                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.price)}
+                                            </div>
+                                          </div>
+
                                         </div>
                                       );
                                     })()}
                                   </div>
                                 </div>
-
-                                {/* Footer Info */}
-                                <div className="mt-4 flex items-center justify-between pt-3 border-t border-neutral-800/50 text-xs">
-                                  <div className="flex items-center gap-1.5 text-slate-400 bg-neutral-800/50 px-2 py-1 rounded">
-                                    <Calendar size={12} />
-                                    <span>{formatDate(order.expectedDelivery)}</span>
-                                  </div>
-                                  <div className="font-mono font-bold text-gold-400 text-sm">
-                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.price)}
-                                  </div>
-                                </div>
-
-                              </div>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
 
                         {/* RIGHT PART: Sticky Order Info - RESTORED ORIGINAL STYLE */}
@@ -2647,6 +2633,7 @@ export const KanbanBoard: React.FC = () => {
                     );
                   });
                 })()}
+
               </div>
             </div>
           ) : (
@@ -2726,7 +2713,7 @@ export const KanbanBoard: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
+      </div >
 
 
       {/* Confirmation & Warning Modal */}
