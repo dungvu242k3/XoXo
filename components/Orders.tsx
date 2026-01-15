@@ -655,6 +655,7 @@ export const Orders: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [qrPrintTargetId, setQrPrintTargetId] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filters, setFilters] = useState({
@@ -1786,6 +1787,7 @@ export const Orders: React.FC = () => {
                 </th>
 
                 <th className="p-4 min-w-[200px]">Khách Hàng</th>
+                <th className="p-4 w-12 text-center text-slate-500"><QrCode size={14} className="mx-auto" /></th>
                 <th className="p-4">Sản Phẩm</th>
                 <th className="p-4 text-right">Tổng Tiền</th>
                 <th className="p-4">Trạng Thái</th>
@@ -1824,6 +1826,19 @@ export const Orders: React.FC = () => {
                       <div className="text-[10px] text-gold-600/80 font-bold mt-0.5 uppercase tracking-wide">
                         {getCustomerInfo(order.customerId)?.tier || 'Member'}
                       </div>
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQrPrintTargetId(order.id);
+                          setShowQRModal(true);
+                        }}
+                        className="p-1.5 text-slate-500 hover:text-gold-500 hover:bg-gold-900/10 rounded transition-colors"
+                        title="In mã QR đơn này"
+                      >
+                        <QrCode size={18} />
+                      </button>
                     </td>
                     <td className="p-4">
                       <div className="flex -space-x-2">
@@ -2087,18 +2102,47 @@ export const Orders: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
                   <Printer size={18} /> In Ngay
                 </button>
-                <button onClick={() => setShowQRModal(false)} className="p-2 hover:bg-neutral-800 rounded-full transition-colors text-slate-400">
+                <button onClick={() => { setShowQRModal(false); setQrPrintTargetId(null); }} className="p-2 hover:bg-neutral-800 rounded-full transition-colors text-slate-400">
                   <X size={20} />
                 </button>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 bg-neutral-950">
-              <div className="bg-white shadow-lg mx-auto max-w-[210mm] min-h-[297mm] p-8 print:p-4 print:w-full print:shadow-none text-black">
-                {orders.filter(o => selectedOrderIds.has(o.id)).map(order => (
+              <style>{`
+                @media print {
+                  body * {
+                    visibility: hidden;
+                  }
+                  #printable-ticket-area, #printable-ticket-area * {
+                    visibility: visible;
+                  }
+                  #printable-ticket-area {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    margin: 0;
+                    padding: 0;
+                    background: white;
+                    color: black !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  @page {
+                    size: A4;
+                    margin: 10mm;
+                  }
+                }
+              `}</style>
+              <div id="printable-ticket-area" className="bg-white shadow-lg mx-auto max-w-[210mm] min-h-[297mm] p-8 print:p-0 print:w-full print:shadow-none text-black">
+                {orders.filter(o => qrPrintTargetId ? o.id === qrPrintTargetId : selectedOrderIds.has(o.id)).map(order => (
                   <div key={order.id} className="break-inside-avoid mb-8 pb-8 border-b-2 border-dashed border-slate-300 last:border-0 last:mb-0 last:pb-0">
 
                     {/* 1. Main Order Ticket (Phiếu Tiếp Nhận) */}
