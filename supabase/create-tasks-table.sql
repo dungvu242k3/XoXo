@@ -144,3 +144,10 @@ ANALYZE public.cac_task_quy_trinh;
 -- GROUP BY cb.id, cb.ten_buoc
 -- ORDER BY cb.id;
 
+ALTER TABLE don_hang 
+ADD COLUMN IF NOT EXISTS ly_do_phu_phi text,
+ADD COLUMN IF NOT EXISTS loai_giam_gia text DEFAULT 'money'; -- 'money' hoặc 'percent'
+-- Kiểm tra và thêm các cột khác nếu thiếu
+ALTER TABLE don_hang 
+ADD COLUMN IF NOT EXISTS giam_gia numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS phi_phat_sinh numeric DEFAULT 0;
