@@ -181,17 +181,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const mapVietnameseInventoryToEnglish = (vnItem: any): InventoryItem => {
     return {
-      id: vnItem.ma_vat_tu || vnItem.id,
+      id: vnItem.id || vnItem.ma_vat_tu,
       sku: vnItem.ma_sku || vnItem.sku,
       name: vnItem.ten_vat_tu || vnItem.name,
-      category: vnItem.danh_muc || vnItem.category,
-      quantity: vnItem.so_luong || vnItem.quantity,
-      unit: vnItem.don_vi || vnItem.unit,
+      category: mapInventoryCategoryDbToDisplay(vnItem.danh_muc || vnItem.category),
+      quantity: vnItem.so_luong_ton || vnItem.so_luong || vnItem.quantity,
+      unit: vnItem.don_vi_tinh || vnItem.don_vi || vnItem.unit,
       minThreshold: vnItem.nguong_toi_thieu || vnItem.minThreshold,
       importPrice: vnItem.gia_nhap || vnItem.importPrice,
       supplier: vnItem.nha_cung_cap || vnItem.supplier,
-      lastImport: vnItem.ngay_nhap_gan_nhat || vnItem.lastImport,
-      image: vnItem.hinh_anh || vnItem.image
+      lastImport: vnItem.lan_nhap_cuoi || vnItem.ngay_nhap_gan_nhat || vnItem.lastImport,
+      image: vnItem.anh_vat_tu || vnItem.hinh_anh || vnItem.image
     };
   };
 
@@ -342,6 +342,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       'VVIP': 'vvip'
     };
     return mapping[displayValue] || 'thuong';
+  };
+
+  const mapInventoryCategoryDisplayToDb = (displayValue: string): string => {
+    const mapping: Record<string, string> = {
+      'Hoá chất': 'hoa_chat',
+      'Phụ kiện': 'phu_kien',
+      'Dụng cụ': 'dung_cu',
+      'Vật tư tiêu hao': 'vat_tu_tieu_hao'
+    };
+    return mapping[displayValue] || 'vat_tu_tieu_hao';
+  };
+
+  const mapInventoryCategoryDbToDisplay = (dbValue: string | null | undefined): InventoryItem['category'] => {
+    if (!dbValue) return 'Vật tư tiêu hao';
+    const mapping: Record<string, InventoryItem['category']> = {
+      'hoa_chat': 'Hoá chất',
+      'phu_kien': 'Phụ kiện',
+      'dung_cu': 'Dụng cụ',
+      'vat_tu_tieu_hao': 'Vật tư tiêu hao'
+    };
+    return mapping[dbValue] || 'Vật tư tiêu hao';
   };
 
   const mapVietnameseCustomerToEnglish = (vnItem: any): Customer => {
@@ -601,7 +622,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const { data, error } = await supabase
         .from(DB_TABLES.INVENTORY)
-        .select('id, ma_sku, ten_vat_tu, danh_muc, so_luong_ton, don_vi_tinh, nguong_toi_thieu, gia_nhap, nha_cung_cap, lan_nhap_cuoi, anh_vat_tu')
+        .select('*')
         .order('ten_vat_tu', { ascending: true })
         .limit(100); // Giới hạn để tăng tốc độ
 
@@ -684,10 +705,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   useEffect(() => {
+    // 1. Tải dữ liệu từ cache (localStorage) để hiển thị TỨC THÌ
+    console.log('⚡ Loading data from cache...');
+    try {
+      const cachedOrders = localStorage.getItem('cache_orders');
+      const cachedInventory = localStorage.getItem('cache_inventory');
+      const cachedMembers = localStorage.getItem('cache_members');
+      const cachedProducts = localStorage.getItem('cache_products');
+      const cachedCustomers = localStorage.getItem('cache_customers');
+      const cachedWorkflows = localStorage.getItem('cache_workflows');
+
+      if (cachedOrders) setOrders(JSON.parse(cachedOrders));
+      if (cachedInventory) setInventory(JSON.parse(cachedInventory));
+      if (cachedMembers) setMembers(JSON.parse(cachedMembers));
+      if (cachedProducts) setProducts(JSON.parse(cachedProducts));
+      if (cachedCustomers) setCustomers(JSON.parse(cachedCustomers));
+      if (cachedWorkflows) setWorkflows(JSON.parse(cachedWorkflows));
+
+      console.log('✅ Local cache loaded');
+    } catch (e) {
+      console.warn('⚠️ Error loading from cache:', e);
+    }
+
     // Set loading = false NGAY LẬP TỨC để UI hiển thị (không block UI)
     setIsLoading(false);
 
-    // Load TẤT CẢ data song song cùng lúc (không block UI)
+    const startTime = performance.now();
+
+    // 2. Fetch dữ liệu mới từ Supabase trong background
+    console.log('🔄 Fetching fresh data from Supabase...');
+
     Promise.allSettled([
       loadOrders(),
       loadInventory(),
@@ -698,29 +745,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     ])
       .then((results) => {
         const totalTime = performance.now() - startTime;
-        console.log('✅ All data loading completed:', {
-          totalTime: `${totalTime.toFixed(2)}ms`,
-          results: results.map((result, index) => {
-            const functionNames = ['loadOrders', 'loadInventory', 'loadMembers', 'loadProducts', 'loadCustomers', 'loadWorkflows'];
-            return {
-              function: functionNames[index] || `function_${index}`,
-              status: result.status,
-              rejected: result.status === 'rejected' ? {
-                error: result.reason,
-                message: result.reason instanceof Error ? result.reason.message : String(result.reason),
-                stack: result.reason instanceof Error ? result.reason.stack : undefined
-              } : null
-            };
-          })
+        console.log('✅ All data loading completed (Background):', {
+          totalTime: `${totalTime.toFixed(2)}ms`
         });
-
-        // Log specifically if orders failed
-        const ordersResult = results[0];
-        if (ordersResult.status === 'rejected') {
-          console.error('❌ loadOrders FAILED:', ordersResult.reason);
-        } else {
-          console.log('✅ loadOrders completed successfully');
-        }
       })
       .catch((err) => {
         console.error('❌ Error in Promise.allSettled:', err);
@@ -793,7 +820,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // Setup realtime sau 5 giây để không làm chậm initial load
-    // Nếu WebSocket fails, app vẫn hoạt động bình thường
     const realtimeTimeout = setTimeout(setupRealtime, 5000);
 
     return () => {
@@ -803,6 +829,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
   }, []);
+
+  // 4. Tự động lưu cache mỗi khi dữ liệu thay đổi
+  useEffect(() => {
+    // Debounce việc lưu cache để không ghi file quá nhiều lần
+    const timer = setTimeout(() => {
+      try {
+        if (orders.length > 0) localStorage.setItem('cache_orders', JSON.stringify(orders.slice(0, 50))); // Chỉ cache 50 đơn gần nhất để tiết kiệm dung lượng
+        if (inventory.length > 0) localStorage.setItem('cache_inventory', JSON.stringify(inventory));
+        if (members.length > 0) localStorage.setItem('cache_members', JSON.stringify(members));
+        if (products.length > 0) localStorage.setItem('cache_products', JSON.stringify(products));
+        if (customers.length > 0) localStorage.setItem('cache_customers', JSON.stringify(customers));
+        if (workflows.length > 0) localStorage.setItem('cache_workflows', JSON.stringify(workflows));
+        // console.log('💾 Data auto-cached');
+      } catch (e) {
+        console.warn('⚠️ Sync cache error (possibly quota full):', e);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [orders, inventory, members, products, customers, workflows]);
 
 
   // --- 2. Thêm Đơn Hàng & Trừ Kho ---
@@ -969,6 +1015,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
           });
           console.log(`📦 Đã cập nhật ${inventoryUpdates.size} vật tư trong kho`);
+
+          // Sync local inventory state
+          setInventory(prev => prev.map(item => {
+            if (inventoryUpdates.has(item.id)) {
+              return { ...item, quantity: inventoryUpdates.get(item.id)! };
+            }
+            return item;
+          }));
         });
       }
     } catch (error) {
@@ -1545,25 +1599,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Cập nhật một vật tư cụ thể
   const updateInventoryItem = async (itemId: string, updatedItem: InventoryItem) => {
     try {
-      const itemData = {
+      const itemData: any = {
         ma_sku: updatedItem.sku,
         ten_vat_tu: updatedItem.name,
-        danh_muc: updatedItem.category,
+        danh_muc: mapInventoryCategoryDisplayToDb(updatedItem.category),
         so_luong_ton: updatedItem.quantity,
         don_vi_tinh: updatedItem.unit,
         nguong_toi_thieu: updatedItem.minThreshold || 0,
         gia_nhap: updatedItem.importPrice || 0,
         nha_cung_cap: updatedItem.supplier || null,
-        lan_nhap_cuoi: updatedItem.lastImport || null,
+        lan_nhap_cuoi: formatDateForDB(updatedItem.lastImport),
         anh_vat_tu: updatedItem.image || null
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from(DB_TABLES.INVENTORY)
         .update(itemData)
-        .eq('id', itemId);
+        .eq('id', itemId)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // OPTIMISTIC UPDATE: Cập nhật local state ngay lập tức
+      const updatedInventoryItem = mapVietnameseInventoryToEnglish(data);
+      setInventory(prev => prev.map(item => item.id === itemId ? updatedInventoryItem : item));
+
+      // Backup reload (vẫn cần thiết để đảm bảo đồng bộ hoàn toàn)
+      loadInventory();
     } catch (error) {
       console.error('Error updating inventory item:', error);
       throw error;
@@ -1579,6 +1642,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .eq('id', itemId);
 
       if (error) throw error;
+
+      // OPTIMISTIC UPDATE: Xóa khỏi local state ngay lập tức
+      setInventory(prev => prev.filter(item => item.id !== itemId));
+
+      // Backup reload
+      loadInventory();
     } catch (error) {
       console.error('Error deleting inventory item:', error);
       throw error;
@@ -1589,24 +1658,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addInventoryItem = async (newItem: InventoryItem) => {
     try {
       // KHÔNG gửi id - để database tự tạo
-      const itemData = {
+      const itemData: any = {
         ma_sku: newItem.sku,
         ten_vat_tu: newItem.name,
-        danh_muc: newItem.category,
+        danh_muc: mapInventoryCategoryDisplayToDb(newItem.category),
         so_luong_ton: newItem.quantity,
         don_vi_tinh: newItem.unit,
         nguong_toi_thieu: newItem.minThreshold || 0,
         gia_nhap: newItem.importPrice || 0,
         nha_cung_cap: newItem.supplier || null,
-        lan_nhap_cuoi: newItem.lastImport || null,
+        lan_nhap_cuoi: formatDateForDB(newItem.lastImport),
         anh_vat_tu: newItem.image || null
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from(DB_TABLES.INVENTORY)
-        .insert(itemData);
+        .insert(itemData)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // OPTIMISTIC UPDATE: Thêm vào local state ngay lập tức
+      const newlyAddedItem = mapVietnameseInventoryToEnglish(data);
+      setInventory(prev => [newlyAddedItem, ...prev]);
+
+      // Backup reload
+      loadInventory();
     } catch (error) {
       console.error('Error adding inventory item:', error);
       throw error;
